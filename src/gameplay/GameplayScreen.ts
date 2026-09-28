@@ -2,6 +2,7 @@ import { Audio } from '../core/Audio';
 import { clamp, Spring1 } from '../core/MathUtil';
 import { GameplayImages, L, waterMask } from './Assets';
 import { ART_VALUES, formatScore, formatTime, Hud, HudPlacement, placeHud, Rect } from './Hud';
+import { curveAt, LEVEL_LENGTH, SECTIONS } from './Level';
 import {
   ART_H,
   ART_W,
@@ -19,7 +20,7 @@ import {
 } from './Rail';
 import { BASE_SPEED, Item, Lane, MAX_SPEED, Track } from './Track';
 
-export type GameState = 'ready' | 'riding' | 'paused' | 'crashed';
+export type GameState = 'ready' | 'riding' | 'paused' | 'crashed' | 'finished';
 
 type Control = 'left' | 'right' | 'pause';
 
@@ -114,6 +115,8 @@ export class GameplayScreen {
   /** Briefly untouchable after a hit is absorbed, so one block cannot end it. */
   private invuln = 0;
   private staggerTime = 0;
+  /** The section title that flashes up as he enters a new stretch. */
+  private banner = { text: '', time: 0 };
   private stride = 0;
   /** Smoothed acceleration, -1..1: he surges forward and eases back. */
   private surge = 0;
@@ -254,8 +257,9 @@ export class GameplayScreen {
    * every stride, and surges forward or eases back as the pace changes.
    */
   private boyPose(): { dx: number; dy: number; angle: number; scale: number } {
-    // Across the rail - the whole point of the left/right controls.
-    let dx = this.laneSpring.value * BOY_LANE_PX;
+    // Across the rail - the whole point of the left/right controls - plus
+    // wherever the route itself has bent to at the point he has reached.
+    let dx = (this.laneSpring.value + curveAt(this.track.d)) * BOY_LANE_PX;
     let dy = 0;
     let scale = 1;
     // Lean into the turn, and let the lean carry him a little further out.
@@ -470,6 +474,26 @@ export class GameplayScreen {
     this.crash();
   }
 
+  /** A new stretch of the route: name it briefly, then get out of the way. */
+  private enterSection(i: number): void {
+    this.banner = { text: SECTIONS[i].name, time: 2.4 };
+    this.audio.click();
+  }
+
+  /** He rode the route out. */
+  private finish(): void {
+    if (this.state !== 'riding') return;
+    this.state = 'finished';
+    this.audio.ride(0, false);
+    this.banner = { text: '', time: 0 };
+    this.showCard(
+      `<h2>LEVEL 12 COMPLETE</h2>
+       <div class="stats"><span>SCORE</span><span>${formatScore(this.score)}</span><span>COINS</span><span>${this.coins - ART_VALUES.coins}</span><span>TIME</span><span>${formatTime(this.seconds - ART_VALUES.seconds)}</span></div>
+       <button class="btn" data-action="again">RIDE AGAIN</button>`,
+      { again: () => this.reset() },
+    );
+  }
+
   private crash(): void {
     this.state = 'crashed';
     this.crashTime = 0;
@@ -498,6 +522,7 @@ export class GameplayScreen {
     this.shield = 0;
     this.invuln = 0;
     this.staggerTime = 0;
+    this.banner = { text: '', time: 0 };
     this.shake = 0;
     this.redFlash = 0;
     this.blueFlash = 0;
@@ -536,7 +561,8 @@ export class GameplayScreen {
 
   update(dt: number): void {
     for (const k of ['left', 'right', 'pause'] as const) this.press[k] = Math.max(0, this.press[k] - dt);
-    if (this.state === 'paused' || this.state === 'ready') return;
+    if (this.state === 'paused' || this.state === 'ready' || this.state === 'finished') return;
+    this.banner.time = Math.max(0, this.banner.time - dt);
     this.time += dt;
     const riding = this.state === 'riding';
     const prevLane = this.laneSpring.value;
@@ -545,6 +571,8 @@ export class GameplayScreen {
     for (const ev of this.track.update(dt, this.laneSpring.value, riding)) {
       if (ev.type === 'coin') this.collect(ev.item);
       else if (ev.type === 'crash') this.takeHit();
+      else if (ev.type === 'section') this.enterSection(ev.section ?? 0);
+      else if (ev.type === 'finish') this.finish();
       else {
         this.blueFlash = 1;
         this.score += ev.superBoost ? 500 : 100;
@@ -606,7 +634,7 @@ export class GameplayScreen {
   }
 
   private collect(item: Item): void {
-    const x = laneX(item.lane, HIT_Z);
+    const x = laneX(this.track.curvedLane(item.w, item.lane), HIT_Z);
     const y = railY(HIT_Z);
     this.score += 25;
     this.audio.coin();
@@ -667,12 +695,13 @@ export class GameplayScreen {
 
     // ---- the HUD, in the safe area
     c.setTransform(d, 0, 0, d, 0, 0);
-    this.hud.draw(c, this.place, this.score, this.coins, this.seconds, {
+    this.hud.draw(c, this.place, this.score, this.coins, this.seconds, this.track.boostChain, this.track.superCharged, {
       arrow_left: this.press.left,
       arrow_right: this.press.right,
       pause: this.press.pause,
     });
     this.drawFlyingCoins(c);
+    this.drawBanner(c);
     if (this.redFlash > 0) this.vignette(c, `rgba(255, 30, 40, ${0.55 * this.redFlash})`);
     if (this.blueFlash > 0) this.vignette(c, `rgba(90, 200, 255, ${0.45 * this.blueFlash})`);
   }
@@ -771,10 +800,11 @@ export class GameplayScreen {
       // railY(zArt) is the painted coin's own row, so only x needs the nudge
       // from the rail's centre line onto the painted trail.
       const offX = i !== undefined ? (art.cx - laneX(0, zArt)) * scale : 0;
+      const lane = this.track.curvedLane(it.w, it.lane);
       // A gentle spin; painted coins ease into it as they set off.
       const travelled = i !== undefined ? clamp((zArt - z) * 2, 0, 1) : 1;
       const spin = 1 - travelled * 0.14 * (1 - Math.cos(this.time * 3 + it.id));
-      c.translate(laneX(it.lane, z) + offX, railY(z));
+      c.translate(laneX(lane, z) + offX, railY(z));
       c.scale(scale * spin, scale);
       c.drawImage(sprite, -lx, -ly);
     } else {
@@ -782,7 +812,7 @@ export class GameplayScreen {
       const w = BLOCK_W / z;
       const s = w / sprite.width;
       const h = sprite.height * s;
-      const x = laneX(it.lane, z);
+      const x = laneX(this.track.curvedLane(it.w, it.lane), z);
       const bottom = surfaceY(z);
       c.drawImage(sprite, x - w / 2, bottom - h, w, h);
       if (it.state === 'boosted') {
@@ -940,6 +970,34 @@ export class GameplayScreen {
     }
   }
 
+  /** The name of the stretch he has just entered, then it gets out of the way. */
+  private drawBanner(c: CanvasRenderingContext2D): void {
+    if (this.banner.time <= 0) return;
+    const t = this.banner.time / 2.4;
+    // Fade in quickly, hold, fade out.
+    const a = Math.min(1, Math.min(t * 6, (1 - t) * 4));
+    if (a <= 0.01) return;
+    const u = this.place.scale;
+    const x = window.innerWidth / 2;
+    const y = this.place.panels.score.y + this.place.panels.score.h + 92 * u;
+    c.save();
+    c.globalAlpha = a;
+    c.textAlign = 'center';
+    c.textBaseline = 'middle';
+    c.font = `800 ${34 * u}px Montserrat, Roboto, Arial, sans-serif`;
+    c.lineJoin = 'round';
+    c.lineWidth = 7 * u;
+    c.strokeStyle = 'rgba(8, 20, 60, 0.7)';
+    c.strokeText(this.banner.text, x, y);
+    const g = c.createLinearGradient(0, y - 20 * u, 0, y + 20 * u);
+    g.addColorStop(0, '#fffbc2');
+    g.addColorStop(0.5, '#ffd940');
+    g.addColorStop(1, '#f29a00');
+    c.fillStyle = g;
+    c.fillText(this.banner.text, x, y);
+    c.restore();
+  }
+
   private vignette(c: CanvasRenderingContext2D, color: string): void {
     const W = window.innerWidth;
     const H = window.innerHeight;
@@ -971,6 +1029,10 @@ export class GameplayScreen {
       /** Items that have swept past him and are rushing at the viewer. */
       passing: this.track.items.filter((it) => this.track.z(it) < HIT_Z).length,
       state: this.state,
+      section: this.track.section,
+      sectionName: SECTIONS[this.track.section].name,
+      progress: this.track.progress,
+      levelLength: LEVEL_LENGTH,
       shield: this.shield,
       boostChain: this.track.boostChain,
       superCharged: this.track.superCharged,

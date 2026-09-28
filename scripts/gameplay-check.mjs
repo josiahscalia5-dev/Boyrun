@@ -253,6 +253,35 @@ const shot = async (page, name) => {
   check(hit && survived, 'a safe ride absorbs the hit and he keeps riding');
   const after = await page.evaluate(() => window.__skz.advance(1.2));
   check(after.state === 'riding' && after.d > 0, 'the ride carries on after the hit is absorbed');
+  // ---- Level 12 is a route with an end, not a treadmill.
+  {
+    await page.evaluate(() => { window.__skz.screen.reset(); window.__skz.screen.start(); });
+    const start = await page.evaluate(() => window.__skz.advance(0.4));
+    check(start.progress < 0.1 && start.section === 0, `starts at the top of the route (${start.sectionName})`);
+    // Ride into each later section and check he is told where he is.
+    const names = [];
+    for (let i = 1; i < 7; i++) {
+      const at = await page.evaluate((n) => window.__skz.warp(n), i * 20 + 1);
+      await page.evaluate(() => window.__skz.advance(0.3));
+      names.push(at.sectionName);
+    }
+    check(new Set(names).size === names.length, `each stretch is its own section (${names.join(' > ')})`);
+    // The bend actually moves him across the rail as the route curves.
+    const bendA = await page.evaluate(() => { window.__skz.warp(52); return window.__skz.advance(0.3); });
+    const bendB = await page.evaluate(() => { window.__skz.warp(59); return window.__skz.advance(0.3); });
+    check(Math.abs(bendA.boy.x - bendB.boy.x) > 8, `the route bends under him (${Math.abs(bendA.boy.x - bendB.boy.x).toFixed(0)}px across a curve)`);
+    // Ride the last of it out and reach the end.
+    await page.evaluate(() => window.__skz.warp(window.__skz.state().levelLength - 4));
+    let done = null;
+    for (let i = 0; i < 60 && !done; i++) {
+      const s2 = await page.evaluate(() => window.__skz.advance(0.25));
+      if (s2.state === 'finished') done = s2;
+    }
+    check(!!done, 'riding the route out finishes the level');
+    check(done ? done.progress === 1 : false, 'the level ends because he reached the end, not on a timer');
+    check(await page.isVisible('text=LEVEL 12 COMPLETE'), 'the finish shows LEVEL 12 COMPLETE');
+    await shot(page, 'level-complete');
+  }
   check(errors.length === 0, `no errors (${errors.join(' | ')})`);
   await page.close();
 }

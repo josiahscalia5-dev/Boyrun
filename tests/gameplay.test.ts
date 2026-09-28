@@ -17,6 +17,7 @@ import {
   surfaceY,
   zFromY,
 } from '../src/gameplay/Rail';
+import { curveAt, LEVEL_LENGTH, SECTIONS, sectionAt } from '../src/gameplay/Level';
 import { Track } from '../src/gameplay/Track';
 
 const COINS = layout.coins;
@@ -118,8 +119,8 @@ describe('Track', () => {
   it('never blocks all three lanes and gives time to react to every gate', () => {
     const t = new Track(7);
     const seen = new Map<number, Set<number>>();
-    for (let i = 0; i < 60 * 120; i++) {
-      t.update(1 / 60, 5, true); // ride 2 minutes out of reach
+    for (let i = 0; i < 60 * 65 && !t.finished; i++) {
+      t.update(1 / 60, 5, true); // ride the whole route, out of reach
       for (const it of t.items) {
         if (it.kind !== 'gate') continue;
         const key = Math.round(it.w * 100);
@@ -128,7 +129,7 @@ describe('Track', () => {
         seen.set(key, set);
       }
     }
-    expect(seen.size).toBeGreaterThan(20);
+    expect(seen.size).toBeGreaterThan(8);
     for (const lanes of seen.values()) expect(lanes.size).toBeLessThan(3);
     const rows = [...seen.keys()].sort((a, b) => a - b);
     for (let i = 1; i < rows.length; i++) expect(rows[i] - rows[i - 1]).toBeGreaterThanOrEqual(100); // >= 1.0 depth apart
@@ -206,5 +207,62 @@ describe('boost chain and safe ride', () => {
     expect(t.speed).toBeGreaterThan(0);
     expect(t.superCharged).toBe(false);
     expect(t.boostChain).toBe(0);
+  });
+});
+
+
+describe('the Level 12 route', () => {
+  it('is laid out end to end with no gaps', () => {
+    expect(SECTIONS.length).toBeGreaterThan(4);
+    expect(LEVEL_LENGTH).toBe(SECTIONS.reduce((n, s) => n + s.length, 0));
+    // Every point of the route belongs to exactly one section, in order.
+    let last = -1;
+    for (let w = 0; w < LEVEL_LENGTH; w += 0.5) {
+      const i = sectionAt(w);
+      expect(i).toBeGreaterThanOrEqual(last);
+      last = i;
+    }
+    expect(sectionAt(LEVEL_LENGTH - 0.01)).toBe(SECTIONS.length - 1);
+  });
+
+  it('bends continuously, and never off the rail', () => {
+    let prev = curveAt(0);
+    for (let w = 0; w < LEVEL_LENGTH; w += 0.25) {
+      const c = curveAt(w);
+      expect(Math.abs(c)).toBeLessThanOrEqual(0.4); // stays on the painted rail
+      expect(Math.abs(c - prev)).toBeLessThan(0.1); // no kink at a join
+      prev = c;
+    }
+  });
+
+  it('is actually ridden to its end, and finishes there', () => {
+    const t = new Track(4);
+    let finishes = 0;
+    let steps = 0;
+    while (!t.finished && steps < 60 * 200) {
+      finishes += t.update(1 / 60, 0, true).filter((e) => e.type === 'finish').length;
+      steps++;
+    }
+    expect(t.finished).toBe(true);
+    expect(finishes).toBe(1);
+    expect(t.d).toBeGreaterThanOrEqual(LEVEL_LENGTH);
+    expect(t.progress).toBe(1);
+    // A real ride, not an instant one.
+    expect(steps / 60).toBeGreaterThan(30);
+  });
+
+  it('announces every section once, in order', () => {
+    const t = new Track(4);
+    const entered: number[] = [];
+    while (!t.finished) {
+      for (const e of t.update(1 / 60, 0, true)) if (e.type === 'section') entered.push(e.section!);
+    }
+    expect(entered).toEqual([...SECTIONS.keys()].slice(1));
+  });
+
+  it('leaves the run in to the finish clear of obstacles', () => {
+    const t = new Track(4);
+    while (!t.finished) t.update(1 / 60, 0, true);
+    expect(t.items.every((it) => it.kind !== 'gate')).toBe(true);
   });
 });

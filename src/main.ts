@@ -30,6 +30,11 @@ async function boot(): Promise<void> {
     manual: (on: boolean) => {
       screen.manualTime = on;
     },
+    // Jump along the route, so the far end can be tested without riding it all.
+    warp: (d: number) => {
+      screen.track.d = d;
+      return screen.snapshot();
+    },
     advance: (seconds: number, step = 1 / 60) => {
       screen.manualTime = true;
       for (let t = 0; t < seconds - 1e-9; t += step) screen.update(step);

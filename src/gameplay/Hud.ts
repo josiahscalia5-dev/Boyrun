@@ -30,6 +30,8 @@ export function formatTime(seconds: number): string {
 }
 
 const NUM = '"Roboto Condensed", "Arial Narrow", Arial, sans-serif';
+/** Chevrons needed for the super boost - kept in step with Track. */
+const CHAIN = 3;
 const LABEL = 'Montserrat, Roboto, Arial, sans-serif';
 
 /**
@@ -80,7 +82,16 @@ export function placeHud(safe: Rect): HudPlacement {
 export class Hud {
   constructor(private readonly img: GameplayImages) {}
 
-  draw(ctx: CanvasRenderingContext2D, hud: HudPlacement, score: number, coins: number, seconds: number, press: Record<string, number>): void {
+  draw(
+    ctx: CanvasRenderingContext2D,
+    hud: HudPlacement,
+    score: number,
+    coins: number,
+    seconds: number,
+    boostChain: number,
+    superCharged: boolean,
+    press: Record<string, number>,
+  ): void {
     // The painted arrow buttons stay exactly as the artwork has them. They
     // still answer a tap, but steering is the finger: see bindTouchSteering.
     for (const name of ['badge', 'score', 'time', 'pause', 'arrow_left', 'arrow_right'] as const) {
@@ -133,6 +144,7 @@ export class Hud {
       c.shadowColor = 'rgba(0, 8, 30, 0.75)';
       c.fillText(String(coins), ct.x - L.ui.score.x, ct.y - L.ui.score.y, 120);
     });
+    this.drawBoostChain(ctx, hud, boostChain, superCharged);
     this.panelText(ctx, hud, 'time', (c) => {
       const t = L.text.time;
       c.font = `700 ${t.size}px ${NUM}`;
@@ -142,6 +154,43 @@ export class Hud {
       c.shadowBlur = 2;
       c.fillText(formatTime(seconds), t.x - L.ui.time.x, t.y - L.ui.time.y, 110);
     });
+  }
+
+  /**
+   * BOOST n/3, tucked under the painted score panel in the same style. Three
+   * pips fill as the chevrons are taken; all three light while the super boost
+   * is running. It is only there once he has taken one, so the opening frame
+   * is the artwork.
+   */
+  private drawBoostChain(ctx: CanvasRenderingContext2D, hud: HudPlacement, chain: number, superCharged: boolean): void {
+    if (chain <= 0 && !superCharged) return;
+    const u = hud.scale;
+    const panel = hud.panels.score;
+    const x = panel.x + 14 * u;
+    const y = panel.y + panel.h + 16 * u;
+    const lit = superCharged ? CHAIN : chain;
+    ctx.save();
+    ctx.font = `800 ${26 * u}px ${LABEL}`;
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'middle';
+    ctx.shadowColor = 'rgba(4, 12, 40, 0.85)';
+    ctx.shadowOffsetY = 2 * u;
+    ctx.shadowBlur = 3 * u;
+    ctx.fillStyle = superCharged ? '#bdf0ff' : '#cfe0ff';
+    ctx.fillText(superCharged ? 'SUPER SPEED' : `BOOST ${chain}/${CHAIN}`, x, y + 14 * u);
+    ctx.shadowColor = 'transparent';
+    for (let i = 0; i < CHAIN; i++) {
+      const px = x + (i * 26 + 9) * u;
+      const py = y + 40 * u;
+      ctx.beginPath();
+      ctx.arc(px, py, 8 * u, 0, Math.PI * 2);
+      ctx.fillStyle = i < lit ? (superCharged ? '#8fe8ff' : '#ffd940') : 'rgba(210, 225, 255, 0.28)';
+      ctx.fill();
+      ctx.lineWidth = 2 * u;
+      ctx.strokeStyle = 'rgba(8, 20, 60, 0.7)';
+      ctx.stroke();
+    }
+    ctx.restore();
   }
 
   /** Runs `body` in the panel's own painted pixel space. */

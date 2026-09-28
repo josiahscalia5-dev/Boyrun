@@ -1,4 +1,5 @@
 import { Rng } from '../core/MathUtil';
+import { curveAt, LEVEL_LENGTH, RUN_IN, sectionAt, SECTIONS } from './Level';
 import { ART_Z, FADE_FAR_Z, HIT_Z, REMOVE_Z } from './Rail';
 
 export type ItemKind = 'coin' | 'gate' | 'boost';
@@ -16,10 +17,12 @@ export interface Item {
 }
 
 export interface TrackEvent {
-  type: 'coin' | 'crash' | 'boost';
+  type: 'coin' | 'crash' | 'boost' | 'section' | 'finish';
   item: Item;
   /** Set on the chevron that completes a chain and fires the super boost. */
   superBoost?: boolean;
+  /** Set on a 'section' event: the section just entered. */
+  section?: number;
 }
 
 /**
@@ -47,6 +50,9 @@ const COIN_GAP = 0.55;
  * blocks approach in three lanes. It starts with exactly the coins painted in
  * the artwork, then continues into generated patterns.
  */
+/** Stands in for the item on events that are about the route, not an object. */
+const NO_ITEM: Item = { id: 0, kind: 'coin', lane: 0, w: 0, state: 'live' };
+
 export class Track {
   d = 0;
   speed = BASE_SPEED;
@@ -55,6 +61,9 @@ export class Track {
   boostChain = 0;
   superTime = 0;
   private chainExpiry = 0;
+  /** The section of the route he is riding, and whether the route is run out. */
+  section = 0;
+  finished = false;
   items: Item[] = [];
   private nextW = 0;
   private nextId = 1;
@@ -75,6 +84,8 @@ export class Track {
     this.boostChain = 0;
     this.superTime = 0;
     this.chainExpiry = 0;
+    this.section = 0;
+    this.finished = false;
     this.items = [];
     this.nextId = 1;
     // The coin trail exactly as painted...
@@ -87,6 +98,16 @@ export class Track {
 
   z(item: Item): number {
     return item.w - this.d;
+  }
+
+  /** How far through Level 12 he is, 0..1. */
+  get progress(): number {
+    return Math.max(0, Math.min(1, this.d / LEVEL_LENGTH));
+  }
+
+  /** The lane an item sits in once the route's bend is taken into account. */
+  curvedLane(w: number, lane: number): number {
+    return lane + curveAt(w);
   }
 
   get boosting(): boolean {
@@ -149,22 +170,35 @@ export class Track {
     const w = this.nextW;
     const lanes: Lane[] = [-1, 0, 1];
     const pick = () => r.pick(lanes);
-    const roll = r.next();
+    const sec = SECTIONS[sectionAt(w)];
+    // The run in to the finish is left clear, so the end is a ride not a wall.
+    if (w > LEVEL_LENGTH - RUN_IN) {
+      this.nextW = w + 2;
+      return;
+    }
+    const mix = sec.mix;
+    const total = mix.coins + mix.gate + mix.gauntlet + mix.chevrons + mix.zigzag;
+    let pickRoll = r.next() * total;
+    const kind =
+      (pickRoll -= mix.coins) < 0 ? 'coins'
+        : (pickRoll -= mix.gate) < 0 ? 'gate'
+          : (pickRoll -= mix.gauntlet) < 0 ? 'gauntlet'
+            : (pickRoll -= mix.chevrons) < 0 ? 'chevrons' : 'zigzag';
     let end = w;
-    if (roll < 0.26) {
+    if (kind === 'coins') {
       end = this.coinTrain(pick(), w, r.int(5, 7));
-    } else if (roll < 0.5) {
+    } else if (kind === 'gate') {
       const gateLane = pick();
       const free = lanes.filter((l) => l !== gateLane);
       this.add('gate', gateLane, w + 0.9);
       end = this.coinTrain(r.pick(free), w, 5);
       end = Math.max(end, w + 0.9);
-    } else if (roll < 0.68) {
+    } else if (kind === 'gauntlet') {
       const freeLane = pick();
       for (const l of lanes) if (l !== freeLane) this.add('gate', l, w + 1.0);
       end = this.coinTrain(freeLane, w + 0.2, 4);
       end = Math.max(end, w + 1.0);
-    } else if (roll < 0.84) {
+    } else if (kind === 'chevrons') {
       // A run of chevrons in one lane: hold it and the chain pays out.
       const lane = pick();
       let ww = w;
@@ -182,7 +216,7 @@ export class Track {
       for (const l of seq) ww = this.coinTrain(l, ww, 3) + COIN_GAP;
       end = ww;
     }
-    this.nextW = end + r.range(1.4, 2.1);
+    this.nextW = end + r.range(sec.gap[0], sec.gap[1]);
   }
 
   /**
@@ -222,7 +256,18 @@ export class Track {
       }
     }
     this.items = this.items.filter((it) => it.w - this.d > REMOVE_Z && !(it.kind === 'coin' && it.state === 'collected'));
-    while (this.nextW < this.d + FADE_FAR_Z + 1.5) this.generate();
+    while (this.nextW < this.d + FADE_FAR_Z + 1.5 && this.nextW < LEVEL_LENGTH) this.generate();
+    // Moving into the next stretch of the route.
+    const sec = sectionAt(this.d);
+    if (sec !== this.section) {
+      this.section = sec;
+      events.push({ type: 'section', item: NO_ITEM, section: sec });
+    }
+    // The end of the route, not the end of a timer.
+    if (!this.finished && this.d >= LEVEL_LENGTH) {
+      this.finished = true;
+      events.push({ type: 'finish', item: NO_ITEM });
+    }
     return events;
   }
 
