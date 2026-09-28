@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">SKIZGAIROS</string>
+    <string name="title_activity_main">SKIZGAIROS</string>
+    <string name="package_name">com.skizgairos.game</string>
+    <string name="custom_url_scheme">com.skizgairos.game</string>
+</resources>
