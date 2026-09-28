@@ -10,7 +10,7 @@
     "preview": "vite preview --host --port 4173 --strictPort",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
-    "playtest": "node scripts/screen1-check.mjs",
+    "playtest": "node scripts/gameplay-check.mjs",
     "android:sync": "npm run build && npx cap sync android",
     "android:open": "npx cap open android"
   },

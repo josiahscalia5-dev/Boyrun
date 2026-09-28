@@ -9,7 +9,7 @@ import numpy as np
 from PIL import Image
 
 shot_path = sys.argv[1]
-ref_path = sys.argv[2] if len(sys.argv) > 2 else 'docs/reference/1-gameplay-screen.png'
+ref_path = sys.argv[2] if len(sys.argv) > 2 else 'docs/reference/1-gameplay-screen-hd.png'
 a = np.asarray(Image.open(shot_path).convert('RGB')).astype(int)
 b = np.asarray(Image.open(ref_path).convert('RGB')).astype(int)
 if a.shape != b.shape:
