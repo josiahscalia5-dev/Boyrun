@@ -1,5 +1,5 @@
 import { Rng } from '../core/MathUtil';
-import { FADE_FAR_Z, HIT_Z, REMOVE_Z, zFromCoinY } from './Perspective';
+import { ART_Z, FADE_FAR_Z, HIT_Z, REMOVE_Z } from './Rail';
 
 export type ItemKind = 'coin' | 'gate' | 'boost';
 export type Lane = -1 | 0 | 1;
@@ -8,9 +8,9 @@ export interface Item {
   id: number;
   kind: ItemKind;
   lane: Lane;
-  /** Position along the rail (same units as depth z). */
+  /** Position along the rail, in the same units as depth. */
   w: number;
-  /** Index of the coin painted in the artwork this item starts as. */
+  /** Index of the coin painted in the artwork that this item starts as. */
   artIndex?: number;
   state: 'live' | 'collected' | 'hit' | 'boosted';
 }
@@ -20,20 +20,23 @@ export interface TrackEvent {
   item: Item;
 }
 
-export const BASE_SPEED = 1.45;
-export const MAX_SPEED = 2.3;
+/**
+ * Rail speed in depth per second. Calibrated so the coin trail sweeps down
+ * the painting at the pace the artwork's motion blur suggests.
+ */
+export const BASE_SPEED = 1.6;
+export const MAX_SPEED = 2.5;
 const BOOST_MUL = 1.4;
 const BOOST_TIME = 1.6;
 /** Lateral tolerance: how close (in lanes) the boy must be to touch an item. */
 const TOUCH = 0.5;
-
-/** Coin centres painted on the gold rail (y in image px), near to far. */
-export const ART_COIN_Y = [540.5, 481.0, 441.0, 421.5];
+/** Spacing of a coin train, matching the painted trail. */
+const COIN_GAP = 0.55;
 
 /**
  * The ride along the gold rail: coins, red X gates and blue chevron boost
- * blocks approach in three lanes. Starts with exactly the coins painted in
- * the artwork, then continues with generated patterns.
+ * blocks approach in three lanes. It starts with exactly the coins painted in
+ * the artwork, then continues into generated patterns.
  */
 export class Track {
   d = 0;
@@ -58,11 +61,12 @@ export class Track {
     this.boostTime = 0;
     this.items = [];
     this.nextId = 1;
-    // The painted coin trail.
-    ART_COIN_Y.forEach((y, i) => this.add('coin', 0, zFromCoinY(y), i));
-    // It continues down the gold rail, then generated patterns take over.
-    for (let w = 3.65; w < 5.2; w += 0.7) this.add('coin', 0, w);
-    this.nextW = 6.2;
+    // The coin trail exactly as painted...
+    ART_Z.forEach((z, i) => this.add('coin', 0, z, i));
+    // ...continuing away down the gold rail, then generated patterns take over.
+    const last = ART_Z[ART_Z.length - 1];
+    for (let w = last + 0.7; w < last + 2.4; w += 0.7) this.add('coin', 0, w);
+    this.nextW = last + 3.4;
   }
 
   z(item: Item): number {
@@ -85,7 +89,7 @@ export class Track {
     return it;
   }
 
-  private coinTrain(lane: Lane, w0: number, n: number, spacing = 0.55): number {
+  private coinTrain(lane: Lane, w0: number, n: number, spacing = COIN_GAP): number {
     for (let i = 0; i < n; i++) this.add('coin', lane, w0 + i * spacing);
     return w0 + (n - 1) * spacing;
   }
@@ -120,9 +124,7 @@ export class Track {
       const dir = r.chance(0.5) ? 1 : -1;
       const seq: Lane[] = dir > 0 ? [-1, 0, 1] : [1, 0, -1];
       let ww = w;
-      for (const l of seq) {
-        ww = this.coinTrain(l, ww, 3) + 0.55;
-      }
+      for (const l of seq) ww = this.coinTrain(l, ww, 3) + COIN_GAP;
       end = ww;
     }
     this.nextW = end + r.range(1.4, 2.1);
@@ -130,13 +132,13 @@ export class Track {
 
   /**
    * Advance the ride. `boyLane` is the boy's continuous lateral position in
-   * lanes (-1..1). Returns events for things that met the boy this step.
+   * lanes (-1..1). Returns events for the things that met him this step.
    */
   update(dt: number, boyLane: number, riding: boolean): TrackEvent[] {
     const events: TrackEvent[] = [];
     this.time += dt;
     if (riding) {
-      const target = Math.min(MAX_SPEED, BASE_SPEED + this.time * 0.009);
+      const target = Math.min(MAX_SPEED, BASE_SPEED + this.time * 0.01);
       this.speed += (target - this.speed) * Math.min(1, dt * 2);
     } else {
       this.speed = 0;
@@ -150,19 +152,17 @@ export class Track {
       if (it.state !== 'live') continue;
       const zPrev = it.w - prevD;
       const zNow = it.w - this.d;
-      if (zPrev > HIT_Z && zNow <= HIT_Z && riding) {
-        if (Math.abs(boyLane - it.lane) < TOUCH) {
-          if (it.kind === 'coin') {
-            it.state = 'collected';
-            events.push({ type: 'coin', item: it });
-          } else if (it.kind === 'gate') {
-            it.state = 'hit';
-            events.push({ type: 'crash', item: it });
-          } else {
-            it.state = 'boosted';
-            this.boostTime = BOOST_TIME;
-            events.push({ type: 'boost', item: it });
-          }
+      if (zPrev > HIT_Z && zNow <= HIT_Z && riding && Math.abs(boyLane - it.lane) < TOUCH) {
+        if (it.kind === 'coin') {
+          it.state = 'collected';
+          events.push({ type: 'coin', item: it });
+        } else if (it.kind === 'gate') {
+          it.state = 'hit';
+          events.push({ type: 'crash', item: it });
+        } else {
+          it.state = 'boosted';
+          this.boostTime = BOOST_TIME;
+          events.push({ type: 'boost', item: it });
         }
       }
     }

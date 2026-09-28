@@ -1,0 +1,133 @@
+import { describe, expect, it } from 'vitest';
+import layout from '../src/gameplay/layout.json';
+import {
+  ART_Z,
+  BOY_LANE_PX,
+  centreX,
+  FADE_NEAR_Z,
+  halfWidth,
+  HIT_Z,
+  laneX,
+  railY,
+  REMOVE_Z,
+  scaleAt,
+  surfaceY,
+  zFromY,
+} from '../src/gameplay/Rail';
+import { Track } from '../src/gameplay/Track';
+
+const COINS = layout.coins;
+const [ART_W, ART_H] = layout.size;
+
+describe('the rail model, measured on the artwork', () => {
+  it('puts every painted coin back exactly where it is painted', () => {
+    COINS.forEach((c, i) => {
+      expect(railY(ART_Z[i])).toBeCloseTo(c.cy, 6);
+      // Size follows 1/z, so the painted radius comes back exactly too.
+      expect(COINS[0].r * scaleAt(ART_Z[i])).toBeCloseTo(c.r, 6);
+    });
+  });
+
+  it('inverts depth and screen row', () => {
+    for (const z of [0.3, 0.7, 1, 2.5, 5, 7]) expect(zFromY(railY(z))).toBeCloseTo(z, 6);
+  });
+
+  it('runs the coin trail down the painted gold rail', () => {
+    // Each painted coin sits on the rail, within a few px of its centre line.
+    COINS.forEach((c) => {
+      expect(Math.abs(c.cx - centreX(c.cy))).toBeLessThan(17);
+      expect(c.cx).toBeGreaterThan(centreX(c.cy) - halfWidth(c.cy));
+      expect(c.cx).toBeLessThan(centreX(c.cy) + halfWidth(c.cy));
+    });
+  });
+
+  it('spreads the three lanes across the rail, widening towards the viewer', () => {
+    let previous = 0;
+    for (const z of [5, 2.5, 1.4, 1, HIT_Z]) {
+      const spread = laneX(1, z) - laneX(-1, z);
+      expect(spread).toBeGreaterThan(previous); // nearer = further apart
+      previous = spread;
+      // Both outer lanes stay on the painted rail.
+      const y = railY(z);
+      expect(laneX(-1, z)).toBeGreaterThan(centreX(y) - halfWidth(y));
+      expect(laneX(1, z)).toBeLessThan(centreX(y) + halfWidth(y));
+    }
+  });
+
+  it('meets the boy on the rail, and drops items only past the bottom edge', () => {
+    // Items reach the boy at chest height and stand on the rail under them.
+    expect(railY(HIT_Z)).toBeGreaterThan(layout.boy.joints.chest[1] - 120);
+    expect(railY(HIT_Z)).toBeLessThan(layout.boy.joints.pelvis[1]);
+    expect(surfaceY(HIT_Z)).toBeGreaterThan(railY(HIT_Z));
+    expect(railY(REMOVE_Z)).toBeGreaterThan(ART_H);
+    // Everything is still on screen when it fades in.
+    expect(railY(FADE_NEAR_Z)).toBeGreaterThan(0);
+    expect(railY(FADE_NEAR_Z)).toBeLessThan(ART_H);
+  });
+
+  it('moves the boy by one lane spacing, well inside the screen', () => {
+    expect(BOY_LANE_PX).toBeCloseTo(laneX(1, HIT_Z) - laneX(0, HIT_Z), 6);
+    expect(layout.boy.feet[0] + BOY_LANE_PX).toBeLessThan(ART_W);
+    expect(layout.boy.feet[0] - BOY_LANE_PX).toBeGreaterThan(0);
+  });
+});
+
+describe('Track', () => {
+  it('starts with exactly the coin trail painted on the gold rail', () => {
+    const t = new Track();
+    const art = t.items.filter((i) => i.artIndex !== undefined);
+    expect(art.map((i) => railY(t.z(i)))).toEqual(COINS.map((c) => expect.closeTo(c.cy, 6)));
+    expect(art.every((i) => i.lane === 0 && i.kind === 'coin')).toBe(true);
+  });
+
+  it('collects the painted coins when riding the centre lane', () => {
+    const t = new Track();
+    let coins = 0;
+    for (let i = 0; i < 120; i++) coins += t.update(1 / 60, 0, true).filter((e) => e.type === 'coin').length;
+    expect(coins).toBeGreaterThanOrEqual(2);
+  });
+
+  it('misses coins in another lane', () => {
+    const t = new Track();
+    let coins = 0;
+    for (let i = 0; i < 60; i++) coins += t.update(1 / 60, 1, true).filter((e) => e.type === 'coin').length;
+    expect(coins).toBe(0);
+  });
+
+  it('never blocks all three lanes and gives time to react to every gate', () => {
+    const t = new Track(7);
+    const seen = new Map<number, Set<number>>();
+    for (let i = 0; i < 60 * 120; i++) {
+      t.update(1 / 60, 5, true); // ride 2 minutes out of reach
+      for (const it of t.items) {
+        if (it.kind !== 'gate') continue;
+        const key = Math.round(it.w * 100);
+        const set = seen.get(key) ?? new Set();
+        set.add(it.lane);
+        seen.set(key, set);
+      }
+    }
+    expect(seen.size).toBeGreaterThan(20);
+    for (const lanes of seen.values()) expect(lanes.size).toBeLessThan(3);
+    const rows = [...seen.keys()].sort((a, b) => a - b);
+    for (let i = 1; i < rows.length; i++) expect(rows[i] - rows[i - 1]).toBeGreaterThanOrEqual(100); // >= 1.0 depth apart
+  });
+
+  it('crashes on a gate in the boy lane and halts', () => {
+    const t = new Track(3);
+    t.items = [{ id: 1, kind: 'gate', lane: 0, w: HIT_Z + 0.2, state: 'live' }];
+    let crash = false;
+    for (let i = 0; i < 60 && !crash; i++) crash = t.update(1 / 60, 0, true).some((e) => e.type === 'crash');
+    expect(crash).toBe(true);
+    t.halt();
+    expect(t.speed).toBe(0);
+  });
+
+  it('keeps the rail stocked ahead of the boy without piling items up', () => {
+    const t = new Track(5);
+    for (let i = 0; i < 60 * 60; i++) t.update(1 / 60, 0, true);
+    expect(t.items.length).toBeGreaterThan(5);
+    expect(t.items.length).toBeLessThan(80);
+    expect(t.items.every((it) => t.z(it) > REMOVE_Z)).toBe(true);
+  });
+});

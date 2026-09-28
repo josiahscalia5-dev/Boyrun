@@ -4,18 +4,21 @@ import '@fontsource/roboto-condensed/700.css';
 import '@fontsource/roboto-condensed/800.css';
 import './styles/game.css';
 import { installNativeInsets } from './game/NativeInsets';
-import { loadScreen1 } from './screen1/Assets';
-import { Screen1 } from './screen1/Screen1';
+import { loadGameplay } from './gameplay/Assets';
+import { GameplayScreen } from './gameplay/GameplayScreen';
 
 async function boot(): Promise<void> {
   installNativeInsets();
   const root = document.getElementById('app')!;
   const [images] = await Promise.all([
-    loadScreen1(),
-    // HUD digits use the condensed font; wait briefly for it.
-    Promise.race([document.fonts?.load('800 41px "Roboto Condensed"'), new Promise((r) => setTimeout(r, 1500))]).catch(() => undefined),
+    loadGameplay(),
+    // The HUD numbers use the condensed font; wait briefly for it.
+    Promise.race([
+      document.fonts?.load('800 64px "Roboto Condensed"'),
+      new Promise((r) => setTimeout(r, 1500)),
+    ]).catch(() => undefined),
   ]);
-  const screen = new Screen1(root, images);
+  const screen = new GameplayScreen(root, images);
   screen.run();
 
   // Test / debug hooks used by the automated playtest.
