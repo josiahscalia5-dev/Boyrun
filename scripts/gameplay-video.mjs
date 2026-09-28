@@ -56,7 +56,7 @@ const swipe = async (dir, dx = 100, ms = 130, steps = 7) => {
 const log = [];
 const note = async (label) => {
   const s = await state();
-  log.push(`${label.padEnd(20)} boyX=${s.boy.x.toFixed(0)}px lane=${s.lane} d=${s.d.toFixed(1)} coins=${s.coins} chain=${s.boostChain} super=${s.superCharged ? 'Y' : '-'} shield=${s.shield}`);
+  log.push(`${label.padEnd(9)} ${String(Math.round(s.progress * 100)).padStart(3)}%  ${s.sectionName.padEnd(15)} boyX=${s.boy.x.toFixed(0)} lane=${s.lane} d=${s.d.toFixed(0)} coins=${s.coins} chain=${s.boostChain} super=${s.superCharged ? 'Y' : '-'} shield=${s.shield}`);
 };
 
 /** The lane the player should be in: away from gates, towards coins. */
@@ -85,19 +85,25 @@ await note('riding, centre lane');
 // Play it properly for 24s: steer away from the red gates, towards the coins.
 const started = Date.now();
 let last = 0;
-while (Date.now() - started < 30000) {
+let lastSection = 0;
+while (Date.now() - started < 130000) {
   const s = await state();
-  if (s.state === 'crashed') break;
+  if (s.state === 'crashed' || s.state === 'finished') break;
+  if (s.section !== lastSection) {
+    lastSection = s.section;
+    await note(`>${s.section}`);
+  }
   const want = await wantedLane();
   if (want !== null && want !== s.lane) {
     await swipe(want < s.lane ? -1 : 1);
   }
   await wait(260);
-  if (Date.now() - started - last > 4000) {
+  if (Date.now() - started - last > 10000) {
     last = Date.now() - started;
     await note(`t=${(last / 1000).toFixed(0)}s`);
   }
 }
+await wait(2200); // hold on the finish card
 await note('end of run');
 
 const s = await state();

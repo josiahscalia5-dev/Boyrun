@@ -251,6 +251,17 @@ const shot = async (page, name) => {
     if (s2.shield === 0) { hit = true; survived = s2.state === 'riding'; }
   }
   check(hit && survived, 'a safe ride absorbs the hit and he keeps riding');
+  // The BOOST n/3 readout appears only once a chevron has been taken.
+  {
+    await page.evaluate(() => { window.__skz.screen.reset(); window.__skz.screen.start(); });
+    const clean = await page.evaluate(() => window.__skz.advance(0.2));
+    check(clean.boostChain === 0 && !clean.superCharged, 'no boost readout before a chevron is taken');
+    const one = await page.evaluate(() => {
+      window.__skz.screen.track.boostChain = 2;
+      return window.__skz.advance(0.2);
+    });
+    check(one.boostChain === 2, 'the chain is counted towards the super boost (2/3)');
+  }
   const after = await page.evaluate(() => window.__skz.advance(1.2));
   check(after.state === 'riding' && after.d > 0, 'the ride carries on after the hit is absorbed');
   // ---- Level 12 is a route with an end, not a treadmill.

@@ -166,28 +166,50 @@ export class Hud {
     if (chain <= 0 && !superCharged) return;
     const u = hud.scale;
     const panel = hud.panels.score;
-    const x = panel.x + 14 * u;
-    const y = panel.y + panel.h + 16 * u;
+    // A pill in the painted panels' own style, under the score, same width.
+    const w = panel.w;
+    const h = 78 * u;
+    const x = panel.x;
+    const y = panel.y + panel.h + 14 * u;
+    const r = 18 * u;
     const lit = superCharged ? CHAIN : chain;
     ctx.save();
-    ctx.font = `800 ${26 * u}px ${LABEL}`;
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.arcTo(x + w, y, x + w, y + h, r);
+    ctx.arcTo(x + w, y + h, x, y + h, r);
+    ctx.arcTo(x, y + h, x, y, r);
+    ctx.arcTo(x, y, x + w, y, r);
+    ctx.closePath();
+    const bg = ctx.createLinearGradient(0, y, 0, y + h);
+    bg.addColorStop(0, 'rgba(18, 38, 92, 0.92)');
+    bg.addColorStop(1, 'rgba(8, 18, 52, 0.92)');
+    ctx.fillStyle = bg;
+    ctx.fill();
+    ctx.lineWidth = 3 * u;
+    ctx.strokeStyle = superCharged ? 'rgba(150, 230, 255, 0.95)' : 'rgba(95, 134, 216, 0.9)';
+    ctx.stroke();
+    ctx.font = `800 ${30 * u}px ${LABEL}`;
     ctx.textAlign = 'left';
     ctx.textBaseline = 'middle';
-    ctx.shadowColor = 'rgba(4, 12, 40, 0.85)';
-    ctx.shadowOffsetY = 2 * u;
-    ctx.shadowBlur = 3 * u;
     ctx.fillStyle = superCharged ? '#bdf0ff' : '#cfe0ff';
-    ctx.fillText(superCharged ? 'SUPER SPEED' : `BOOST ${chain}/${CHAIN}`, x, y + 14 * u);
-    ctx.shadowColor = 'transparent';
+    ctx.fillText(superCharged ? 'SUPER SPEED' : `BOOST ${chain}/${CHAIN}`, x + 18 * u, y + 25 * u);
     for (let i = 0; i < CHAIN; i++) {
-      const px = x + (i * 26 + 9) * u;
-      const py = y + 40 * u;
+      const px = x + (30 + i * 40) * u;
+      const py = y + 56 * u;
       ctx.beginPath();
-      ctx.arc(px, py, 8 * u, 0, Math.PI * 2);
-      ctx.fillStyle = i < lit ? (superCharged ? '#8fe8ff' : '#ffd940') : 'rgba(210, 225, 255, 0.28)';
+      ctx.arc(px, py, 12 * u, 0, Math.PI * 2);
+      if (i < lit) {
+        const g = ctx.createLinearGradient(0, py - 12 * u, 0, py + 12 * u);
+        g.addColorStop(0, superCharged ? '#eafcff' : '#fffbc2');
+        g.addColorStop(1, superCharged ? '#5fd0ff' : '#f29a00');
+        ctx.fillStyle = g;
+      } else {
+        ctx.fillStyle = 'rgba(160, 185, 235, 0.22)';
+      }
       ctx.fill();
-      ctx.lineWidth = 2 * u;
-      ctx.strokeStyle = 'rgba(8, 20, 60, 0.7)';
+      ctx.lineWidth = 2.5 * u;
+      ctx.strokeStyle = 'rgba(8, 20, 60, 0.75)';
       ctx.stroke();
     }
     ctx.restore();
