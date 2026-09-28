@@ -9,7 +9,11 @@ const config: CapacitorConfig = {
   android: {
     backgroundColor: '#6fb3ff',
     allowMixedContent: false,
-    webContentsDebuggingEnabled: false,
+    webContentsDebuggingEnabled: true,
+  },
+  plugins: {
+    // Insets are handled by MainActivity (edge-to-edge + WindowInsets -> game).
+    SystemBars: { insetsHandling: 'disable' },
   },
 };
 
