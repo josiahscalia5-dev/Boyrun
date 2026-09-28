@@ -81,6 +81,9 @@ export class GameplayScreen {
   private readonly hud: Hud;
   private readonly water: HTMLCanvasElement;
   private readonly shimmer: HTMLCanvasElement;
+  private readonly shimmerCtx: CanvasRenderingContext2D;
+  private readonly stripe: HTMLCanvasElement;
+  private readonly stripePattern: CanvasPattern;
   private readonly hit: Record<Control, HTMLButtonElement>;
   private readonly cards: HTMLElement;
   private world: World = { x: 0, y: 0, s: 1 };
@@ -106,6 +109,19 @@ export class GameplayScreen {
     this.shimmer = document.createElement('canvas');
     this.shimmer.width = Math.round(ART_W / 2);
     this.shimmer.height = Math.round(ART_H / 2);
+    this.shimmerCtx = this.shimmer.getContext('2d')!;
+    // One band of light, tiled and scrolled down the falls.
+    this.stripe = document.createElement('canvas');
+    this.stripe.width = 1;
+    this.stripe.height = 75;
+    const stripeCtx = this.stripe.getContext('2d')!;
+    const grad = stripeCtx.createLinearGradient(0, 0, 0, this.stripe.height);
+    grad.addColorStop(0, 'rgba(255,255,255,0)');
+    grad.addColorStop(0.5, 'rgba(255,255,255,1)');
+    grad.addColorStop(1, 'rgba(255,255,255,0)');
+    stripeCtx.fillStyle = grad;
+    stripeCtx.fillRect(0, 0, 1, this.stripe.height);
+    this.stripePattern = this.shimmerCtx.createPattern(this.stripe, 'repeat')!;
     this.bg = document.createElement('canvas');
     this.bg.className = 'layer';
     this.fx = document.createElement('canvas');
@@ -491,31 +507,21 @@ export class GameplayScreen {
     if (this.blueFlash > 0) this.vignette(c, `rgba(90, 200, 255, ${0.45 * this.blueFlash})`);
   }
 
-  /** The painted waterfalls run, using the flow mask cut from the artwork. */
+  /**
+   * The painted waterfalls run: a scrolling band of light, kept inside the
+   * falls by the flow mask cut from the artwork, so no other pixel moves.
+   */
   private drawWaterfalls(c: CanvasRenderingContext2D): void {
     if (this.state === 'ready') return;
     const s = this.shimmer;
-    const sc = s.getContext('2d')!;
-    const k = s.height / ART_H;
-    const period = 150 * k;
-    const off = (this.time * 220 * k) % period;
+    const sc = this.shimmerCtx;
+    const period = this.stripe.height;
+    const off = (this.time * 110) % period;
+    this.stripePattern.setTransform(new DOMMatrix().translateSelf(0, off - period));
     sc.setTransform(1, 0, 0, 1, 0, 0);
     sc.globalCompositeOperation = 'copy';
-    const g = sc.createLinearGradient(0, off - period, 0, off);
-    g.addColorStop(0, 'rgba(255,255,255,0)');
-    g.addColorStop(0.5, 'rgba(255,255,255,1)');
-    g.addColorStop(1, 'rgba(255,255,255,0)');
-    sc.fillStyle = g;
+    sc.fillStyle = this.stripePattern;
     sc.fillRect(0, 0, s.width, s.height);
-    for (let y = off; y < s.height; y += period) {
-      sc.globalCompositeOperation = 'source-over';
-      const g2 = sc.createLinearGradient(0, y, 0, y + period);
-      g2.addColorStop(0, 'rgba(255,255,255,0)');
-      g2.addColorStop(0.5, 'rgba(255,255,255,1)');
-      g2.addColorStop(1, 'rgba(255,255,255,0)');
-      sc.fillStyle = g2;
-      sc.fillRect(0, y, s.width, period);
-    }
     sc.globalCompositeOperation = 'destination-in';
     sc.drawImage(this.water, 0, 0, s.width, s.height);
     c.save();
