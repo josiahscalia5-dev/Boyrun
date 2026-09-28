@@ -754,10 +754,12 @@ export class GameplayScreen {
   private drawBoy(c: CanvasRenderingContext2D): void {
     const { dx, dy, angle, scale } = this.boyPose();
     const t = L.trail;
-    // The trail leans after him: its top follows his skates, its far end lags.
+    // The jet plume is welded to his boots: it moves with him exactly at the
+    // nozzles and only falls behind further down, where it is washing away
+    // towards the viewer.
     c.save();
-    const lag = 0.55 / (ART_H - t.y);
-    c.transform(1, 0, -dx * lag, 1, dx * (1 + lag * t.y), 0);
+    const lag = 0.55 / (ART_H - FEET[1]);
+    c.transform(1, 0, -dx * lag, 1, dx * (1 + lag * FEET[1]), 0);
     c.drawImage(this.img.trail, t.x, t.y);
     c.restore();
     c.save();
