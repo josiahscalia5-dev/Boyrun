@@ -117,6 +117,38 @@ const shot = async (page, name) => {
   await page.dispatchEvent('.hitbox-right', 'pointerdown');
   st = await page.evaluate(() => window.__skz.advance(0.4));
   check(st.lane === 0, 'right arrow moves back to the centre');
+  // ---- The character must visibly move, in real screen pixels.
+  {
+    const centre = await page.evaluate(() => window.__skz.advance(0.6));
+    await page.dispatchEvent('.hitbox-left', 'pointerdown');
+    const left = await page.evaluate(() => window.__skz.advance(0.45));
+    await page.dispatchEvent('.hitbox-right', 'pointerdown');
+    await page.evaluate(() => window.__skz.advance(0.45));
+    await page.dispatchEvent('.hitbox-right', 'pointerdown');
+    const right = await page.evaluate(() => window.__skz.advance(0.45));
+    const leftPx = centre.boy.x - left.boy.x;
+    const rightPx = right.boy.x - centre.boy.x;
+    check(leftPx > 40, `LEFT moves the boy ${leftPx.toFixed(0)}px across the screen`);
+    check(rightPx > 40, `RIGHT moves the boy ${rightPx.toFixed(0)}px across the screen`);
+    check(Math.abs(right.boy.x - left.boy.x) > 90, `full lane sweep is ${Math.abs(right.boy.x - left.boy.x).toFixed(0)}px wide`);
+    check(Math.abs(left.boy.lean) > 0.01 || Math.abs(right.boy.lean) > 0.01, 'he leans into the turn');
+    // He is alive on the rail: the stride keeps moving him frame to frame.
+    const bob = await page.evaluate(() => {
+      const ys = [];
+      for (let i = 0; i < 24; i++) ys.push(window.__skz.advance(1 / 30).boy.y);
+      return Math.max(...ys) - Math.min(...ys);
+    });
+    check(bob > 2, `he rides with a visible push-and-glide (${bob.toFixed(1)}px of travel)`);
+    // Things actually go past him rather than vanishing at his depth.
+    const passing = await page.evaluate(() => {
+      let most = 0;
+      for (let i = 0; i < 90; i++) most = Math.max(most, window.__skz.advance(1 / 30).passing);
+      return most;
+    });
+    check(passing > 0, `coins and blocks sweep past him (${passing} in front of him at once)`);
+    await page.dispatchEvent('.hitbox-left', 'pointerdown');
+    await page.evaluate(() => window.__skz.advance(0.5));
+  }
   st = await page.evaluate(() => window.__skz.advance(1.8));
   check(st.coins > 286, `collects coins on the gold rail (${st.coins})`);
   check(st.score > 24580 && st.seconds > 82, `score and timer run (${st.score}, ${st.seconds.toFixed(1)}s)`);

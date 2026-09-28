@@ -17,7 +17,7 @@ import {
   railY,
   surfaceY,
 } from './Rail';
-import { Item, Lane, Track } from './Track';
+import { BASE_SPEED, Item, Lane, MAX_SPEED, Track } from './Track';
 
 export type GameState = 'ready' | 'riding' | 'paused' | 'crashed';
 
@@ -102,6 +102,11 @@ export class GameplayScreen {
   private streaks: Streak[] = [];
   private lastFrame = 0;
   private rideTime = 0;
+  /** Skating stride: advances with the rail, drives the push-and-glide. */
+  private stride = 0;
+  /** Smoothed acceleration, -1..1: he surges forward and eases back. */
+  private surge = 0;
+  private prevSpeed = 0;
 
   constructor(private readonly root: HTMLElement, private readonly img: GameplayImages) {
     this.hud = new Hud(img);
@@ -140,7 +145,7 @@ export class GameplayScreen {
     this.cards = document.createElement('div');
     this.cards.className = 'cards';
     root.appendChild(this.cards);
-    for (let i = 0; i < 34; i++) this.streaks.push({ u: Math.random() * 1.7 - 0.85, w: Math.random() * FADE_FAR_Z });
+    for (let i = 0; i < 64; i++) this.streaks.push({ u: Math.random() * 1.7 - 0.85, w: Math.random() * FADE_FAR_Z });
     this.place = placeHud({ x: 0, y: 0, w: window.innerWidth, h: window.innerHeight });
     this.bindInput();
     this.layout();
@@ -230,11 +235,29 @@ export class GameplayScreen {
     c.drawImage(this.img.plate, w.x * this.dpr, w.y * this.dpr, ART_W * w.s * this.dpr, ART_H * w.s * this.dpr);
   }
 
-  /** Where the boy is drawn relative to his painted pose. */
-  private boyPose(): { dx: number; dy: number; angle: number } {
+  /**
+   * Where the boy is drawn relative to his painted pose. He rides the rail:
+   * he crosses it as he steers, leans into the turn, pushes and glides with
+   * every stride, and surges forward or eases back as the pace changes.
+   */
+  private boyPose(): { dx: number; dy: number; angle: number; scale: number } {
+    // Across the rail - the whole point of the left/right controls.
     let dx = this.laneSpring.value * BOY_LANE_PX;
     let dy = 0;
-    let angle = clamp(this.laneVel * 0.045, -0.16, 0.16);
+    let scale = 1;
+    // Lean into the turn, and let the lean carry him a little further out.
+    let angle = clamp(this.laneVel * 0.06, -0.22, 0.22);
+    dx += clamp(this.laneVel * 0.055, -0.22, 0.22) * 34;
+    if (this.state !== 'ready') {
+      // Push and glide: he rises and falls on each stride and rocks with it.
+      const push = Math.sin(this.stride);
+      dy -= Math.abs(push) * 13;
+      dx += push * 9;
+      angle += push * 0.028;
+      // Accelerating pulls him towards the viewer; braking eases him back.
+      scale += this.surge * 0.05;
+      dy += this.surge * 14;
+    }
     if (this.state === 'crashed') {
       const t = Math.min(1, this.crashTime * 2.2);
       const side = this.lane > 0 ? -1 : 1;
@@ -242,7 +265,7 @@ export class GameplayScreen {
       dy += Math.sin(Math.min(this.crashTime, 0.4) * 8) * -20 + t * 36;
       dx += side * t * 20;
     }
-    return { dx, dy, angle };
+    return { dx, dy, angle, scale };
   }
 
   // ---------------------------------------------------------------- input
@@ -401,6 +424,12 @@ export class GameplayScreen {
         this.audio.boost();
       }
     }
+    // Locomotion: he pushes along the rail, and feels every change of pace.
+    const v = this.track.speed * (this.track.boosting ? 1.4 : 1);
+    this.stride += dt * (1.1 + v * 1.5);
+    const accel = dt > 0 ? (v - this.prevSpeed) / dt : 0;
+    this.prevSpeed = v;
+    this.surge += (clamp(accel * 0.5, -1, 1) - this.surge) * Math.min(1, dt * 6);
     if (riding) {
       this.rideTime += dt;
       this.seconds += dt;
@@ -470,17 +499,23 @@ export class GameplayScreen {
     // ---- the world, in the artwork's own pixels
     const sx = this.shake > 0 ? (Math.random() - 0.5) * 16 * this.shake : 0;
     const sy = this.shake > 0 ? (Math.random() - 0.5) * 16 * this.shake : 0;
+    // The camera leans into the ride; the painted world follows it as one.
+    const cam = this.camera();
+    const cs = w.s * cam.zoom;
+    const ox = w.x + w.s * ((1 - cam.zoom) * (ART_W / 2) + cam.x * cam.zoom) + sx * w.s;
+    const oy = w.y + w.s * ((1 - cam.zoom) * (ART_H / 2) + cam.y * cam.zoom) + sy * w.s;
+    this.applyCameraToPlate(cam);
     c.save();
-    c.setTransform(d * w.s, 0, 0, d * w.s, d * (w.x + sx * w.s), d * (w.y + sy * w.s));
+    c.setTransform(d * cs, 0, 0, d * cs, d * ox, d * oy);
     c.beginPath();
     c.rect(0, 0, ART_W, ART_H);
     c.clip();
     if (this.shake > 0) c.drawImage(this.img.plate, 0, 0);
     this.drawWaterfalls(c);
     this.drawStreaks(c);
-    // Anything the boy did not catch slips away behind him at his depth; the
-    // gate he crashed into stays just in front of him.
-    const items = this.track.visible().filter((it) => it.state === 'hit' || this.track.z(it) > HIT_Z);
+    // Everything he did not catch keeps coming and sweeps past the viewer, so
+    // the ride reads as travel. Anything nearer than the boy passes in front.
+    const items = this.track.visible();
     let boyDrawn = false;
     for (const it of items) {
       const z = this.track.z(it);
@@ -505,6 +540,31 @@ export class GameplayScreen {
     this.drawFlyingCoins(c);
     if (this.redFlash > 0) this.vignette(c, `rgba(255, 30, 40, ${0.55 * this.redFlash})`);
     if (this.blueFlash > 0) this.vignette(c, `rgba(90, 200, 255, ${0.45 * this.blueFlash})`);
+  }
+
+  /**
+   * The ride's camera: it eases in as he sets off, presses closer as he picks
+   * up speed, and sways after him through a lane change. It never pulls back
+   * past the painting's own framing, so no edge is ever exposed.
+   */
+  private camera(): { x: number; y: number; zoom: number } {
+    if (this.state === 'ready') return { x: 0, y: 0, zoom: 1 };
+    const ramp = clamp(this.rideTime / 0.9, 0, 1);
+    const pace = clamp((this.track.speed - BASE_SPEED) / (MAX_SPEED - BASE_SPEED), 0, 1);
+    const zoom = 1 + ramp * (0.035 + 0.03 * pace + (this.track.boosting ? 0.02 : 0));
+    // The sway stays inside the margin the zoom opens up.
+    const margin = ((zoom - 1) * ART_W) / 2;
+    return { x: clamp(this.laneSpring.value * BOY_LANE_PX * 0.14, -margin, margin), y: 0, zoom };
+  }
+
+  /** The static plate rides the camera as a composited transform, not a redraw. */
+  private applyCameraToPlate(cam: { x: number; y: number; zoom: number }): void {
+    const w = this.world;
+    const still = cam.zoom === 1 && cam.x === 0 && cam.y === 0;
+    this.bg.style.transformOrigin = `${w.x + (ART_W * w.s) / 2}px ${w.y + (ART_H * w.s) / 2}px`;
+    this.bg.style.transform = still
+      ? ''
+      : `translate(${cam.x * w.s * cam.zoom}px, ${cam.y * w.s * cam.zoom}px) scale(${cam.zoom})`;
   }
 
   /**
@@ -539,15 +599,16 @@ export class GameplayScreen {
     c.lineCap = 'round';
     for (const st of this.streaks) {
       const z0 = st.w - this.track.d;
-      const z1 = z0 + 0.16 * boost;
+      // Longer streaks the faster he goes: the rail rushing under his skates.
+      const z1 = z0 + 0.1 * boost * (1 + this.track.speed * 0.45);
       if (z0 < 0.3 || z0 > FADE_FAR_Z) continue;
       const y0 = surfaceY(z0);
       const y1 = surfaceY(z1);
       const x0 = centreX(y0) + st.u * halfWidth(y0);
       const x1 = centreX(y1) + st.u * halfWidth(y1);
-      const a = 0.34 * fadeIn(z0) * Math.min(1, (z0 - 0.3) * 3) * boost * Math.min(1, this.rideTime / 0.8);
+      const a = 0.5 * fadeIn(z0) * Math.min(1, (z0 - 0.3) * 3) * boost * Math.min(1, this.rideTime / 0.8);
       c.strokeStyle = `rgba(255, 246, 214, ${a})`;
-      c.lineWidth = 2.6 / z0;
+      c.lineWidth = 3.4 / z0;
       c.beginPath();
       c.moveTo(x0, y0);
       c.lineTo(x1, y1);
@@ -600,7 +661,7 @@ export class GameplayScreen {
 
   /** The boy and the light trail off his skates, both cut from the artwork. */
   private drawBoy(c: CanvasRenderingContext2D): void {
-    const { dx, dy, angle } = this.boyPose();
+    const { dx, dy, angle, scale } = this.boyPose();
     const t = L.trail;
     // The trail leans after him: its top follows his skates, its far end lags.
     c.save();
@@ -611,6 +672,7 @@ export class GameplayScreen {
     c.save();
     c.translate(FEET[0] + dx, FEET[1] + dy);
     c.rotate(angle);
+    c.scale(scale, scale);
     c.translate(-FEET[0], -FEET[1]);
     c.drawImage(this.img.boy, L.boy.x, L.boy.y);
     c.restore();
@@ -618,8 +680,10 @@ export class GameplayScreen {
 
   private drawBoostGlow(c: CanvasRenderingContext2D): void {
     if (!this.track.boosting && this.blueFlash <= 0) return;
-    const x = FEET[0] + this.laneSpring.value * BOY_LANE_PX;
-    const y = FEET[1] - 40;
+    // Stays under his skates, wherever the stride and the lean have put them.
+    const pose = this.boyPose();
+    const x = FEET[0] + pose.dx;
+    const y = FEET[1] + pose.dy - 40;
     c.save();
     c.globalCompositeOperation = 'lighter';
     const g = c.createRadialGradient(x, y, 8, x, y, 180);
@@ -677,9 +741,26 @@ export class GameplayScreen {
     c.fillRect(0, 0, W, H);
   }
 
+  /** Where a point of the artwork currently lands on the screen. */
+  private toScreen(px: number, py: number): { x: number; y: number } {
+    const w = this.world;
+    const cam = this.camera();
+    const s = w.s * cam.zoom;
+    return {
+      x: w.x + w.s * ((1 - cam.zoom) * (ART_W / 2) + cam.x * cam.zoom) + s * px,
+      y: w.y + w.s * ((1 - cam.zoom) * (ART_H / 2) + cam.y * cam.zoom) + s * py,
+    };
+  }
+
   /** Snapshot for tests / debugging. */
   snapshot() {
+    const pose = this.boyPose();
+    const feet = this.toScreen(FEET[0] + pose.dx, FEET[1] + pose.dy);
     return {
+      // Where the player's character actually is on the screen, right now.
+      boy: { x: feet.x, y: feet.y, lean: pose.angle, scale: pose.scale },
+      /** Items that have swept past him and are rushing at the viewer. */
+      passing: this.track.items.filter((it) => this.track.z(it) < HIT_Z).length,
       state: this.state,
       lane: this.lane,
       lanePos: this.laneSpring.value,

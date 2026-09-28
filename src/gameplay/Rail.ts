@@ -97,21 +97,31 @@ export function surfaceY(z: number): number {
   return railY(z) + SURFACE_DROP / z;
 }
 
-/** Depth at which an item meets the boy - chest height on the coin trail. */
-export const HIT_Z = 0.7;
+/**
+ * The boy's own depth on the rail - where he is actually painted (his feet
+ * sit at depth 0.395). Items meet him here, and because the rail is at its
+ * widest this near the viewer, a lane change moves him right across it.
+ */
+export const HIT_Z = 0.42;
 /** Items fade in out of the distance between these depths. */
 export const FADE_FAR_Z = 7.0;
 export const FADE_NEAR_Z = 5.6;
-/** Items are dropped once they are past the bottom of the artwork. */
-export const REMOVE_Z = 0.26;
+/** Items sweep on past the viewer and fade out over these depths. */
+export const PASS_NEAR_Z = 0.3;
+export const PASS_FAR_Z = 0.24;
+/** Items are dropped once they are well past the bottom of the artwork. */
+export const REMOVE_Z = 0.22;
 /** Width of a gameplay block on the gold rail at z = 1 (it covers one lane). */
 export const BLOCK_W = 86;
 
 /** The boy's lateral travel per lane: the lane spacing where items meet him. */
 export const BOY_LANE_PX = LANE_SPAN * halfWidth(railY(HIT_Z));
 
+/** How solid an item is: it fades in from the distance and out as it passes. */
 export function fadeIn(z: number): number {
   if (z >= FADE_FAR_Z) return 0;
+  if (z <= PASS_FAR_Z) return 0;
+  if (z < PASS_NEAR_Z) return (z - PASS_FAR_Z) / (PASS_NEAR_Z - PASS_FAR_Z);
   if (z <= FADE_NEAR_Z) return 1;
   return (FADE_FAR_Z - z) / (FADE_FAR_Z - FADE_NEAR_Z);
 }

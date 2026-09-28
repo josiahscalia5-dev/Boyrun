@@ -4,10 +4,13 @@ import {
   ART_Z,
   BOY_LANE_PX,
   centreX,
+  fadeIn,
   FADE_NEAR_Z,
   halfWidth,
   HIT_Z,
   laneX,
+  PASS_FAR_Z,
+  PASS_NEAR_Z,
   railY,
   REMOVE_Z,
   scaleAt,
@@ -54,19 +57,37 @@ describe('the rail model, measured on the artwork', () => {
     }
   });
 
-  it('meets the boy on the rail, and drops items only past the bottom edge', () => {
-    // Items reach the boy at chest height and stand on the rail under them.
-    expect(railY(HIT_Z)).toBeGreaterThan(layout.boy.joints.chest[1] - 120);
-    expect(railY(HIT_Z)).toBeLessThan(layout.boy.joints.pelvis[1]);
+  it('meets the boy where he actually rides, down on the rail', () => {
+    // Items reach him between his knees and his feet - the rail he is on,
+    // not high above it - and stand on the rail surface under them.
+    expect(railY(HIT_Z)).toBeGreaterThan(layout.boy.joints.kneeR[1]);
+    expect(railY(HIT_Z)).toBeLessThan(layout.boy.feet[1]);
     expect(surfaceY(HIT_Z)).toBeGreaterThan(railY(HIT_Z));
-    expect(railY(REMOVE_Z)).toBeGreaterThan(ART_H);
-    // Everything is still on screen when it fades in.
+    // Everything is still on screen when it fades in...
     expect(railY(FADE_NEAR_Z)).toBeGreaterThan(0);
     expect(railY(FADE_NEAR_Z)).toBeLessThan(ART_H);
+    // ...and only leaves once it is well past the bottom edge.
+    expect(railY(REMOVE_Z)).toBeGreaterThan(ART_H);
   });
 
-  it('moves the boy by one lane spacing, well inside the screen', () => {
+  it('carries items on past the viewer instead of dropping them at the boy', () => {
+    // An item level with the boy is still solid, so it visibly sweeps by.
+    expect(fadeIn(HIT_Z)).toBe(1);
+    expect(REMOVE_Z).toBeLessThan(HIT_Z);
+    expect(railY(REMOVE_Z)).toBeGreaterThan(railY(HIT_Z));
+    // It only thins out once it is leaving the frame.
+    expect(fadeIn(PASS_NEAR_Z)).toBe(1);
+    expect(fadeIn(PASS_FAR_Z)).toBe(0);
+    expect(fadeIn((PASS_NEAR_Z + PASS_FAR_Z) / 2)).toBeCloseTo(0.5, 2);
+  });
+
+  it('moves the boy right across the rail on a lane change', () => {
     expect(BOY_LANE_PX).toBeCloseTo(laneX(1, HIT_Z) - laneX(0, HIT_Z), 6);
+    // A lane change has to be plainly visible: well over a tenth of the
+    // screen's width, and a good fraction of the boy's own body.
+    expect(BOY_LANE_PX / ART_W).toBeGreaterThan(0.1);
+    expect(BOY_LANE_PX).toBeGreaterThan(layout.boy.w * 0.25);
+    // ...but he still stays on screen at full lock.
     expect(layout.boy.feet[0] + BOY_LANE_PX).toBeLessThan(ART_W);
     expect(layout.boy.feet[0] - BOY_LANE_PX).toBeGreaterThan(0);
   });
