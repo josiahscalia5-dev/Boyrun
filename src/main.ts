@@ -30,6 +30,10 @@ async function boot(): Promise<void> {
     manual: (on: boolean) => {
       screen.manualTime = on;
     },
+    // Depth-plane flow on/off, for the side-by-side comparison.
+    parallax: (on: boolean) => {
+      screen.parallax = on ? 1 : 0;
+    },
     advance: (seconds: number, step = 1 / 60) => {
       screen.manualTime = true;
       for (let t = 0; t < seconds - 1e-9; t += step) screen.update(step);

@@ -2,6 +2,7 @@ import { Audio } from '../core/Audio';
 import { clamp, Spring1 } from '../core/MathUtil';
 import { GameplayImages, L, waterMask } from './Assets';
 import { ART_VALUES, formatScore, formatTime, Hud, HudPlacement, placeHud, Rect } from './Hud';
+import { Parallax } from './Parallax';
 import {
   ART_H,
   ART_W,
@@ -79,6 +80,9 @@ export class GameplayScreen {
   private readonly bgCtx: CanvasRenderingContext2D;
   private readonly ctx: CanvasRenderingContext2D;
   private readonly hud: Hud;
+  /** Depth-plane flow, 0 = off. Compared side by side before adopting. */
+  parallax = 1;
+  private readonly depth: Parallax;
   private readonly water: HTMLCanvasElement;
   private readonly shimmer: HTMLCanvasElement;
   private readonly shimmerCtx: CanvasRenderingContext2D;
@@ -110,6 +114,7 @@ export class GameplayScreen {
 
   constructor(private readonly root: HTMLElement, private readonly img: GameplayImages) {
     this.hud = new Hud(img);
+    this.depth = new Parallax(img.plate);
     this.water = waterMask(img.flow);
     this.shimmer = document.createElement('canvas');
     this.shimmer.width = Math.round(ART_W / 2);
@@ -511,6 +516,10 @@ export class GameplayScreen {
     c.rect(0, 0, ART_W, ART_H);
     c.clip();
     if (this.shake > 0) c.drawImage(this.img.plate, 0, 0);
+    // Depth planes cut from the artwork, flowing outwards as he rides.
+    if (this.parallax > 0 && this.state !== 'ready') {
+      this.depth.draw(c, this.track.d, this.parallax * Math.min(1, this.rideTime / 1.2));
+    }
     this.drawWaterfalls(c);
     this.drawStreaks(c);
     // Everything he did not catch keeps coming and sweeps past the viewer, so
