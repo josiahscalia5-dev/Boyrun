@@ -84,7 +84,7 @@ export class GameplayScreen {
   private readonly shimmerCtx: CanvasRenderingContext2D;
   private readonly stripe: HTMLCanvasElement;
   private readonly stripePattern: CanvasPattern;
-  private readonly hit: Record<'pause', HTMLButtonElement>;
+  private readonly hit: Record<Control, HTMLButtonElement>;
   private readonly cards: HTMLElement;
   private world: World = { x: 0, y: 0, s: 1 };
   private place: HudPlacement;
@@ -144,7 +144,7 @@ export class GameplayScreen {
       root.appendChild(b);
       return b;
     };
-    this.hit = { pause: mk('pause', 'Pause') };
+    this.hit = { left: mk('left', 'Move left'), right: mk('right', 'Move right'), pause: mk('pause', 'Pause') };
     this.cards = document.createElement('div');
     this.cards.className = 'cards';
     root.appendChild(this.cards);
@@ -209,6 +209,8 @@ export class GameplayScreen {
       b.style.width = `${r.w}px`;
       b.style.height = `${r.h}px`;
     };
+    box(this.hit.left, this.place.panels.arrow_left);
+    box(this.hit.right, this.place.panels.arrow_right);
     box(this.hit.pause, this.place.panels.pause);
     // Finger travel for a full lane change, in this screen's pixels.
     this.dragPerLane = Math.max(48, window.innerWidth * 0.18);
@@ -279,6 +281,11 @@ export class GameplayScreen {
       e.stopPropagation();
       this.action('pause');
     });
+    // The arrows let touch through to the steering gesture (a swipe may well
+    // start on one); a tap is picked up on release, and a keyboard press here.
+    for (const name of ['left', 'right'] as const) {
+      this.hit[name].addEventListener('click', () => this.action(name));
+    }
     this.bindTouchSteering();
     window.addEventListener('keydown', (e) => {
       if (e.repeat) return;
@@ -351,10 +358,26 @@ export class GameplayScreen {
       } else if (steering) {
         // A drag: settle onto the rail he is closest to.
         this.steerTo(Math.round(this.laneTarget));
+      } else {
+        // A tap that never moved. On a painted arrow it still steers, so the
+        // buttons in the artwork work - but they are not how you normally play.
+        const on = this.arrowAt(x0, y0);
+        if (on) this.action(on);
       }
     };
     this.root.addEventListener('pointerup', release);
     this.root.addEventListener('pointercancel', release);
+  }
+
+  /** Which painted arrow, if any, a point lands on. */
+  private arrowAt(x: number, y: number): 'left' | 'right' | null {
+    for (const [name, panel] of [['left', this.place.panels.arrow_left], ['right', this.place.panels.arrow_right]] as const) {
+      const rx = panel.x + panel.w / 2;
+      const ry = panel.y + panel.h / 2;
+      const r = panel.w / 2;
+      if ((x - rx) ** 2 + (y - ry) ** 2 <= r * r) return name;
+    }
+    return null;
   }
 
   /** Steer towards a lane, continuously - he is carried, never teleported. */

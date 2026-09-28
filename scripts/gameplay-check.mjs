@@ -59,11 +59,14 @@ const shot = async (page, name) => {
   const painted = await page.evaluate(async () => {
     const L = (await import('/src/gameplay/layout.json')).default;
     const p = window.__skz.state().hud.panels;
-    return ['badge', 'score', 'time', 'pause'].map((k) => [k, Math.abs(p[k].x - L.ui[k].x) + Math.abs(p[k].y - L.ui[k].y)]);
+    return Object.keys(L.ui).filter((k) => k !== 'coin').map((k) => [k, Math.abs(p[k].x - L.ui[k].x) + Math.abs(p[k].y - L.ui[k].y)]);
   });
   for (const [name, off] of painted) check(off < 0.5, `${name} panel sits exactly where it is painted`);
-  // Steering is by touch now: the painted arrow buttons are gone.
-  check((await page.locator('.hitbox-left, .hitbox-right').count()) === 0, 'no large left/right arrow buttons on screen');
+  // The painted arrows stay as the artwork has them, but they must not
+  // swallow a swipe that happens to begin on one.
+  const swallow = await page.evaluate(() =>
+    ['left', 'right'].map((n) => getComputedStyle(document.querySelector(`.hitbox-${n}`)).pointerEvents));
+  check(swallow.every((v) => v === 'none'), 'the painted arrows let a swipe through to the game');
 
   // Pixel comparison of the rebuilt opening frame against the supplied image.
   const fid = await page.evaluate(async ([w, h]) => {
@@ -83,16 +86,10 @@ const shot = async (page, name) => {
     b.getContext('2d').drawImage(art, 0, 0, w, h);
     const pa = actx.getImageData(0, 0, w, h).data;
     const pb = b.getContext('2d').getImageData(0, 0, w, h).data;
-    // The two painted arrow buttons were deliberately removed, so compare
-    // everything except the circles they occupied.
-    const arrows = [[157, 1318, 128], [865, 1318, 128]];
     let within8 = 0;
     let within24 = 0;
     let counted = 0;
     for (let i = 0; i < pa.length; i += 4) {
-      const px = (i / 4) % w;
-      const py = Math.floor(i / 4 / w);
-      if (arrows.some(([cx, cy, r]) => (px - cx) ** 2 + (py - cy) ** 2 < r * r)) continue;
       counted++;
       const d = Math.max(Math.abs(pa[i] - pb[i]), Math.abs(pa[i + 1] - pb[i + 1]), Math.abs(pa[i + 2] - pb[i + 2]));
       if (d <= 8) within8++;
@@ -163,6 +160,19 @@ const shot = async (page, name) => {
   await page.mouse.up();
   st = await page.evaluate(() => window.__skz.advance(0.5));
   check(Number.isInteger(st.lane) && Math.abs(st.lanePos - st.lane) < 0.06, 'letting go settles him onto a rail');
+  // Tapping a painted arrow is still honoured, as the secondary control.
+  await page.evaluate(() => { window.__skz.screen.reset(); window.__skz.screen.start(); });
+  await page.evaluate(() => window.__skz.advance(0.3));
+  const arrowL = await page.evaluate(() => {
+    const r = window.__skz.state().hud.panels.arrow_left;
+    return [r.x + r.w / 2, r.y + r.h / 2];
+  });
+  await page.mouse.move(arrowL[0], arrowL[1]);
+  await page.mouse.down();
+  await page.waitForTimeout(60);
+  await page.mouse.up();
+  st = await page.evaluate(() => window.__skz.advance(0.5));
+  check(st.lane === -1, 'tapping the painted left arrow still steers him');
   // ---- The character must visibly move, in real screen pixels.
   {
     // From a clean start, so the measurement is from the centre rail.

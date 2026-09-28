@@ -81,9 +81,9 @@ export class Hud {
   constructor(private readonly img: GameplayImages) {}
 
   draw(ctx: CanvasRenderingContext2D, hud: HudPlacement, score: number, coins: number, seconds: number, press: Record<string, number>): void {
-    // The painted arrow buttons are not drawn: steering is by touch, and the
-    // plate behind them is clean, so the world shows through as painted.
-    for (const name of ['badge', 'score', 'time', 'pause'] as const) {
+    // The painted arrow buttons stay exactly as the artwork has them. They
+    // still answer a tap, but steering is the finger: see bindTouchSteering.
+    for (const name of ['badge', 'score', 'time', 'pause', 'arrow_left', 'arrow_right'] as const) {
       const box = hud.panels[name];
       const sprite = this.img.ui[name];
       ctx.drawImage(sprite, box.x, box.y, box.w, box.h);
