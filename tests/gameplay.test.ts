@@ -152,3 +152,59 @@ describe('Track', () => {
     expect(t.items.every((it) => t.z(it) > REMOVE_Z)).toBe(true);
   });
 });
+
+describe('boost chain and safe ride', () => {
+  const chevrons = (t: Track, n: number) => {
+    const fired: boolean[] = [];
+    for (let i = 0; i < n; i++) {
+      t.items = [{ id: 100 + i, kind: 'boost', lane: 0, w: t.d + HIT_Z + 0.05, state: 'live' }];
+      for (let k = 0; k < 40; k++) {
+        const ev = t.update(1 / 60, 0, true).find((e) => e.type === 'boost');
+        if (ev) {
+          fired.push(ev.superBoost === true);
+          break;
+        }
+      }
+    }
+    return fired;
+  };
+
+  it('fires the super boost on every third chevron in a row', () => {
+    const t = new Track(9);
+    const fired = chevrons(t, 6);
+    expect(fired.length).toBe(6);
+    expect(fired).toEqual([false, false, true, false, false, true]);
+  });
+
+  it('runs faster on a boost, and faster still on the super boost', () => {
+    const plain = new Track(9);
+    plain.update(1 / 60, 5, true);
+    const base = plain.velocity;
+    const t = new Track(9);
+    chevrons(t, 2);
+    const boosted = t.velocity;
+    chevrons(t, 1);
+    expect(boosted).toBeGreaterThan(base);
+    expect(t.superCharged).toBe(true);
+    expect(t.velocity).toBeGreaterThan(boosted);
+  });
+
+  it('lets the chain lapse if the chevrons are too far apart', () => {
+    const t = new Track(9);
+    chevrons(t, 2);
+    expect(t.boostChain).toBe(2);
+    for (let i = 0; i < 60 * 9; i++) t.update(1 / 60, 5, true); // ride on without one
+    expect(chevrons(t, 1)).toEqual([false]); // the chain had lapsed, so no super
+  });
+
+  it('knocks the pace out of him on a stagger without stopping the ride', () => {
+    const t = new Track(9);
+    for (let i = 0; i < 120; i++) t.update(1 / 60, 5, true);
+    const before = t.speed;
+    t.stagger();
+    expect(t.speed).toBeLessThan(before);
+    expect(t.speed).toBeGreaterThan(0);
+    expect(t.superCharged).toBe(false);
+    expect(t.boostChain).toBe(0);
+  });
+});

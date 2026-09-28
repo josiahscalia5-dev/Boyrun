@@ -18,6 +18,8 @@ export interface Item {
 export interface TrackEvent {
   type: 'coin' | 'crash' | 'boost';
   item: Item;
+  /** Set on the chevron that completes a chain and fires the super boost. */
+  superBoost?: boolean;
 }
 
 /**
@@ -28,6 +30,12 @@ export const BASE_SPEED = 1.6;
 export const MAX_SPEED = 2.5;
 const BOOST_MUL = 1.4;
 const BOOST_TIME = 1.6;
+/** Every third chevron in a row fires the super boost. */
+export const CHAIN_LENGTH = 3;
+export const SUPER_MUL = 1.85;
+const SUPER_TIME = 3.2;
+/** How long a chain stays alive between chevrons. */
+const CHAIN_WINDOW = 7;
 /** Lateral tolerance: how close (in lanes) the boy must be to touch an item. */
 const TOUCH = 0.5;
 /** Spacing of a coin train, matching the painted trail. */
@@ -42,6 +50,10 @@ export class Track {
   d = 0;
   speed = BASE_SPEED;
   boostTime = 0;
+  /** Chevrons taken so far towards the next super boost, 0..CHAIN_LENGTH-1. */
+  boostChain = 0;
+  superTime = 0;
+  private chainExpiry = 0;
   items: Item[] = [];
   private nextW = 0;
   private nextId = 1;
@@ -59,6 +71,9 @@ export class Track {
     this.time = 0;
     this.speed = BASE_SPEED;
     this.boostTime = 0;
+    this.boostChain = 0;
+    this.superTime = 0;
+    this.chainExpiry = 0;
     this.items = [];
     this.nextId = 1;
     // The coin trail exactly as painted...
@@ -75,6 +90,39 @@ export class Track {
 
   get boosting(): boolean {
     return this.boostTime > 0;
+  }
+
+  /** Running on the super boost won by a full chain of chevrons. */
+  get superCharged(): boolean {
+    return this.superTime > 0;
+  }
+
+  /** How fast the rail is actually running, boosts included. */
+  get velocity(): number {
+    return this.speed * (this.superTime > 0 ? SUPER_MUL : this.boostTime > 0 ? BOOST_MUL : 1);
+  }
+
+  /**
+   * A blue chevron was taken. Every third one in a row fires the super boost,
+   * which is the hook a HUD counter or a reward would hang off later.
+   */
+  private takeBoost(): boolean {
+    if (this.time > this.chainExpiry) this.boostChain = 0;
+    this.chainExpiry = this.time + CHAIN_WINDOW;
+    this.boostTime = BOOST_TIME;
+    this.boostChain++;
+    if (this.boostChain < CHAIN_LENGTH) return false;
+    this.boostChain = 0;
+    this.superTime = SUPER_TIME;
+    return true;
+  }
+
+  /** Clipped something but survived it: lose the pace, keep riding. */
+  stagger(): void {
+    this.speed = Math.max(BASE_SPEED * 0.45, this.speed * 0.5);
+    this.boostTime = 0;
+    this.superTime = 0;
+    this.boostChain = 0;
   }
 
   /** Stop dead (the boy hit a gate). */
@@ -144,7 +192,8 @@ export class Track {
       this.speed = 0;
     }
     this.boostTime = Math.max(0, this.boostTime - dt);
-    const v = this.speed * (this.boostTime > 0 ? BOOST_MUL : 1);
+    this.superTime = Math.max(0, this.superTime - dt);
+    const v = this.velocity;
     const prevD = this.d;
     this.d += v * dt;
 
@@ -161,8 +210,7 @@ export class Track {
           events.push({ type: 'crash', item: it });
         } else {
           it.state = 'boosted';
-          this.boostTime = BOOST_TIME;
-          events.push({ type: 'boost', item: it });
+          events.push({ type: 'boost', item: it, superBoost: this.takeBoost() });
         }
       }
     }

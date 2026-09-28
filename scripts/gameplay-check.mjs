@@ -237,6 +237,22 @@ const shot = async (page, name) => {
   await page.click('text=TRY AGAIN');
   st = await page.evaluate(() => window.__skz.advance(0.05));
   check(st.state === 'ready' && st.score === 24580 && st.coins === 286, 'retry returns to the opening screen');
+  // With a safe ride in hand the same hit is absorbed and the run continues.
+  await page.evaluate(() => {
+    window.__skz.screen.reset();
+    window.__skz.screen.start();
+    window.__skz.screen.shield = 1;
+  });
+  let survived = false;
+  let hit = false;
+  for (let i = 0; i < 90 && !hit; i++) {
+    const s2 = await page.evaluate(() => window.__skz.advance(0.25));
+    if (s2.state === 'crashed') break;
+    if (s2.shield === 0) { hit = true; survived = s2.state === 'riding'; }
+  }
+  check(hit && survived, 'a safe ride absorbs the hit and he keeps riding');
+  const after = await page.evaluate(() => window.__skz.advance(1.2));
+  check(after.state === 'riding' && after.d > 0, 'the ride carries on after the hit is absorbed');
   check(errors.length === 0, `no errors (${errors.join(' | ')})`);
   await page.close();
 }

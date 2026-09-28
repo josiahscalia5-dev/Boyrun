@@ -109,6 +109,11 @@ export class GameplayScreen {
   private lastFrame = 0;
   private rideTime = 0;
   /** Skating stride: advances with the rail, drives the push-and-glide. */
+  /** Safe rides in hand: one absorbs a hit that would otherwise end the run. */
+  shield = 0;
+  /** Briefly untouchable after a hit is absorbed, so one block cannot end it. */
+  private invuln = 0;
+  private staggerTime = 0;
   private stride = 0;
   /** Smoothed acceleration, -1..1: he surges forward and eases back. */
   private surge = 0;
@@ -266,6 +271,11 @@ export class GameplayScreen {
       // Accelerating pulls him towards the viewer; braking eases him back.
       scale += this.surge * 0.05;
       dy += this.surge * 14;
+    }
+    if (this.staggerTime > 0) {
+      const k = this.staggerTime / 0.7;
+      angle += Math.sin(this.staggerTime * 34) * 0.12 * k;
+      dx += Math.sin(this.staggerTime * 27) * 16 * k;
     }
     if (this.state === 'crashed') {
       const t = Math.min(1, this.crashTime * 2.2);
@@ -441,6 +451,25 @@ export class GameplayScreen {
     this.lastFrame = performance.now();
   }
 
+  /**
+   * Something was clipped. A safe ride absorbs it and he rides on with the
+   * pace knocked out of him; without one the run ends.
+   */
+  private takeHit(): void {
+    if (this.invuln > 0) return;
+    if (this.shield > 0) {
+      this.shield--;
+      this.invuln = 1.1;
+      this.staggerTime = 0.7;
+      this.track.stagger();
+      this.shake = 0.7;
+      this.blueFlash = 1;
+      this.audio.blocked();
+      return;
+    }
+    this.crash();
+  }
+
   private crash(): void {
     this.state = 'crashed';
     this.crashTime = 0;
@@ -466,6 +495,9 @@ export class GameplayScreen {
     this.rideTime = 0;
     this.sparks = [];
     this.flying = [];
+    this.shield = 0;
+    this.invuln = 0;
+    this.staggerTime = 0;
     this.shake = 0;
     this.redFlash = 0;
     this.blueFlash = 0;
@@ -512,13 +544,20 @@ export class GameplayScreen {
     this.laneVel = dt > 0 ? (this.laneSpring.value - prevLane) / dt : 0;
     for (const ev of this.track.update(dt, this.laneSpring.value, riding)) {
       if (ev.type === 'coin') this.collect(ev.item);
-      else if (ev.type === 'crash') this.crash();
+      else if (ev.type === 'crash') this.takeHit();
       else {
         this.blueFlash = 1;
-        this.score += 100;
+        this.score += ev.superBoost ? 500 : 100;
         this.audio.boost();
+        if (ev.superBoost) {
+          // A full chain of chevrons: super speed, and a safe ride in hand.
+          this.shield = Math.min(1, this.shield + 1);
+          this.shake = Math.max(this.shake, 0.35);
+        }
       }
     }
+    this.invuln = Math.max(0, this.invuln - dt);
+    this.staggerTime = Math.max(0, this.staggerTime - dt);
     // Locomotion: he pushes along the rail, and feels every change of pace.
     const v = this.track.speed * (this.track.boosting ? 1.4 : 1);
     this.stride += dt * (1.1 + v * 1.5);
@@ -622,6 +661,7 @@ export class GameplayScreen {
     }
     if (!boyDrawn) this.drawBoy(c);
     this.drawBoostGlow(c);
+    this.drawShield(c);
     this.drawSparks(c);
     c.restore();
 
@@ -819,19 +859,48 @@ export class GameplayScreen {
   }
 
   private drawBoostGlow(c: CanvasRenderingContext2D): void {
-    if (!this.track.boosting && this.blueFlash <= 0) return;
+    if (!this.track.boosting && !this.track.superCharged && this.blueFlash <= 0) return;
     // Stays under his skates, wherever the stride and the lean have put them.
     const pose = this.boyPose();
     const x = FEET[0] + pose.dx;
     const y = FEET[1] + pose.dy - 40;
     c.save();
     c.globalCompositeOperation = 'lighter';
-    const g = c.createRadialGradient(x, y, 8, x, y, 180);
-    const a = this.track.boosting ? 0.45 + 0.15 * Math.sin(this.time * 30) : 0.3 * this.blueFlash;
-    g.addColorStop(0, `rgba(170, 240, 255, ${a})`);
+    const superb = this.track.superCharged;
+    const r = superb ? 250 : 180;
+    const g = c.createRadialGradient(x, y, 8, x, y, r);
+    const a = (this.track.boosting || superb ? 0.45 + 0.15 * Math.sin(this.time * 30) : 0.3 * this.blueFlash) * (superb ? 1.4 : 1);
+    g.addColorStop(0, superb ? `rgba(235, 250, 255, ${a})` : `rgba(170, 240, 255, ${a})`);
     g.addColorStop(1, 'rgba(60, 160, 255, 0)');
     c.fillStyle = g;
-    c.fillRect(x - 180, y - 180, 360, 360);
+    c.fillRect(x - r, y - r, r * 2, r * 2);
+    c.restore();
+  }
+
+  /** A safe ride in hand: a shell around him, shown in the world not the HUD. */
+  private drawShield(c: CanvasRenderingContext2D): void {
+    if (this.shield <= 0 && this.invuln <= 0) return;
+    const pose = this.boyPose();
+    const x = FEET[0] + pose.dx;
+    const y = FEET[1] + pose.dy - 230;
+    const rx = 250;
+    const ry = 310;
+    // It flares as it takes the hit, then settles to a steady shimmer.
+    const burst = this.invuln > 0 && this.shield <= 0 ? this.invuln / 1.1 : 0;
+    const a = (0.16 + 0.05 * Math.sin(this.time * 6)) * (this.shield > 0 ? 1 : 0) + burst * 0.5;
+    if (a <= 0.005) return;
+    c.save();
+    c.globalCompositeOperation = 'lighter';
+    c.translate(x, y);
+    c.scale(1, ry / rx);
+    const g = c.createRadialGradient(0, 0, rx * 0.55, 0, 0, rx);
+    g.addColorStop(0, 'rgba(120, 220, 255, 0)');
+    g.addColorStop(0.82, `rgba(150, 230, 255, ${a})`);
+    g.addColorStop(1, 'rgba(90, 180, 255, 0)');
+    c.fillStyle = g;
+    c.beginPath();
+    c.arc(0, 0, rx, 0, Math.PI * 2);
+    c.fill();
     c.restore();
   }
 
@@ -902,6 +971,9 @@ export class GameplayScreen {
       /** Items that have swept past him and are rushing at the viewer. */
       passing: this.track.items.filter((it) => this.track.z(it) < HIT_Z).length,
       state: this.state,
+      shield: this.shield,
+      boostChain: this.track.boostChain,
+      superCharged: this.track.superCharged,
       lane: this.lane,
       lanePos: this.laneSpring.value,
       d: this.track.d,
