@@ -53,6 +53,9 @@ interface Streak {
 }
 
 const FEET = L.boy.feet as [number, number];
+/** Where his knees and his boots fall through the sprite, top to bottom. */
+const KNEE_V = ((L.boy.joints.kneeL[1] + L.boy.joints.kneeR[1]) / 2 - L.boy.y) / L.boy.h;
+const FEET_V = (FEET[1] - L.boy.y) / L.boy.h;
 /** The world is framed so the boy's feet sit this far down the screen. */
 const FOCUS = 0.8;
 /** How much of the artwork may be cropped away before it is fitted instead. */
@@ -254,11 +257,12 @@ export class GameplayScreen {
     let angle = clamp(this.laneVel * 0.06, -0.22, 0.22);
     dx += clamp(this.laneVel * 0.055, -0.22, 0.22) * 34;
     if (this.state !== 'ready') {
-      // Push and glide: he rises and falls on each stride and rocks with it.
+      // Push and glide. Most of the rise and fall now comes from his knees
+      // folding (see drawBoyBody); this is just the sway that goes with it.
       const push = Math.sin(this.stride);
-      dy -= Math.abs(push) * 13;
-      dx += push * 9;
-      angle += push * 0.028;
+      dy -= Math.abs(push) * 4;
+      dx += push * 8;
+      angle += push * 0.026;
       // Accelerating pulls him towards the viewer; braking eases him back.
       scale += this.surge * 0.05;
       dy += this.surge * 14;
@@ -767,8 +771,51 @@ export class GameplayScreen {
     c.rotate(angle);
     c.scale(scale, scale);
     c.translate(-FEET[0], -FEET[1]);
-    c.drawImage(this.img.boy, L.boy.x, L.boy.y);
+    this.drawBoyBody(c);
     c.restore();
+  }
+
+  /**
+   * The boy himself, drawn as a stack of thin slices of his own painted
+   * pixels. Nothing is redrawn: the slices are nudged against each other so
+   * that his knees take the push of each stride with his boots planted on the
+   * rail, and his upper body leads the turn while his feet follow it.
+   */
+  private drawBoyBody(c: CanvasRenderingContext2D): void {
+    const B = L.boy;
+    const N = 26;
+    const band = B.h / N;
+    // How hard he is pushing through the stride, and how hard he is turning.
+    const push = this.state === 'ready' ? 0 : (1 - Math.cos(this.stride * 2)) / 2;
+    const lead = clamp(this.laneVel * 0.5, -1, 1);
+    const twist = this.state === 'ready' ? 0 : Math.sin(this.stride);
+
+    // A slice's height shrinks where his legs fold - most at the knee.
+    const heights: number[] = [];
+    for (let i = 0; i < N; i++) {
+      const v = (i + 0.5) / N;
+      const knee = Math.exp(-(((v - KNEE_V) / 0.14) ** 2)); // bell around the knee
+      heights.push(band * (1 - push * 0.09 * knee));
+    }
+    // Stack them up from his boots, which stay on the rail.
+    const tops: number[] = new Array(N);
+    let y = B.y + B.h;
+    for (let i = N - 1; i >= 0; i--) {
+      y -= heights[i];
+      tops[i] = y;
+    }
+    for (let i = 0; i < N; i++) {
+      const v = (i + 0.5) / N;
+      // His shoulders lead the turn; his boots stay with the rail. His torso
+      // counter-rotates a little with each push, as a skater's does.
+      const above = Math.max(0, 1 - v / FEET_V);
+      const sway = lead * 13 * above * above + twist * 2.6 * above * (1 - above) * 4;
+      c.drawImage(
+        this.img.boy,
+        0, i * band, B.w, band + 1,
+        B.x + sway, tops[i], B.w, heights[i] + 1,
+      );
+    }
   }
 
   private drawBoostGlow(c: CanvasRenderingContext2D): void {

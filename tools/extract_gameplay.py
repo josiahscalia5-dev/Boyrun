@@ -311,24 +311,10 @@ plate = plate.astype(np.uint8)
 # 2) Everything else (sky, islands, clouds behind the HUD and the boy's
 #    arms): texture-aware inpainting from the surrounding artwork.
 rest = (hole > 0) & ~filled
-# Scenery right behind the boy (hair/arms over islands and clouds): patch-based
-# synthesis from the surrounding artwork keeps real texture (narrow areas).
-near_boy = rest & (boy_hole > 0)
-if near_boy.any():
-    ys_n, xs_n = np.where(near_boy)
-    bx0, bx1 = max(0, xs_n.min() - 120), min(W, xs_n.max() + 120)
-    by0, by1 = max(0, ys_n.min() - 120), min(H, ys_n.max() + 120)
-    sub = plate[by0:by1, bx0:bx1].copy()
-    known_sub = (~((hole[by0:by1, bx0:bx1] > 0) & ~filled[by0:by1, bx0:bx1])).astype(np.uint8) * 255
-    lab_s = cv2.cvtColor(sub, cv2.COLOR_BGR2Lab)
-    out_s = np.zeros_like(lab_s)
-    cv2.xphoto.inpaint(lab_s, known_sub, out_s, cv2.xphoto.INPAINT_SHIFTMAP)
-    syn = cv2.cvtColor(out_s, cv2.COLOR_Lab2BGR)
-    region = near_boy[by0:by1, bx0:bx1]
-    sub[region] = syn[region]
-    plate[by0:by1, bx0:bx1] = sub
-    filled |= near_boy
-    rest = (hole > 0) & ~filled
+# The scenery behind him (arms and hair over clouds and islands) goes through
+# the same smooth fill as everything else. Patch-based synthesis was tried here
+# and pasted visible rectangles into the cloud gradients, which showed the
+# moment he steered far enough to uncover them.
 rest8 = rest.astype(np.uint8) * 255
 # Low-frequency fill at 1/8 scale (no streak artefacts), refined at full scale.
 small_p = cv2.resize(plate, (W // 8, H // 8), interpolation=cv2.INTER_AREA)
