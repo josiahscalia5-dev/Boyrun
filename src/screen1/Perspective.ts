@@ -31,7 +31,7 @@ export const FADE_NEAR_Z = 3.0;
 /** Items are removed once they leave the bottom of the screen. */
 export const REMOVE_Z = 0.27;
 /** Boy's lateral shift per lane (px) - lanes seen at his depth. */
-export const BOY_LANE_PX = 38;
+export const BOY_LANE_PX = 30;
 
 /** Centre line of the gold rail (through the coin trail). */
 export function centreX(y: number): number {

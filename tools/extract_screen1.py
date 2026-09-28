@@ -32,6 +32,9 @@ for c in [
     [(270,560),(320,560),(330,600),(320,660),(300,700),(260,700),(240,660),(230,610)],
     [(236,760),(265,745),(280,800),(250,805)],
     [(270,530),(310,528),(325,555),(280,565)],
+    # gloves with the orange fingertips
+    [(158,648),(170,636),(190,632),(200,640),(196,658),(178,666),(162,662)],
+    [(362,684),(372,674),(392,680),(406,694),(404,712),(392,718),(376,708)],
 ]:
     cv2.fillPoly(mask, [np.array(c, np.int32)], cv2.GC_FGD)
 # Rail visible beside the head / under the right arm is background.
@@ -47,6 +50,11 @@ n, lab, stats, _ = cv2.connectedComponentsWithStats(boy)
 boy = np.where(lab == 1 + np.argmax(stats[1:, cv2.CC_STAT_AREA]), 255, 0).astype(np.uint8)
 # fill pinholes
 boy = cv2.morphologyEx(boy, cv2.MORPH_CLOSE, np.ones((3, 3), np.uint8))
+# Fingertip glow: grow the mask a little around both hands.
+hands = np.zeros_like(boy)
+cv2.circle(hands, (176, 652), 22, 255, -1)
+cv2.circle(hands, (390, 700), 24, 255, -1)
+boy = np.where((hands > 0) & (cv2.dilate(boy, np.ones((7, 7), np.uint8)) > 0), 255, boy).astype(np.uint8)
 boy_alpha = cv2.GaussianBlur(boy, (3, 3), 0.7)
 
 # --------------------------------------------------------------- coins
