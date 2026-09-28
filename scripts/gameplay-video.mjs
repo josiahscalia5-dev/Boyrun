@@ -56,7 +56,7 @@ const swipe = async (dir, dx = 100, ms = 130, steps = 7) => {
 const log = [];
 const note = async (label) => {
   const s = await state();
-  log.push(`${label.padEnd(26)} boyX=${s.boy.x.toFixed(0)}px  lane=${s.lane}  d=${s.d.toFixed(2)}  coins=${s.coins}  passing=${s.passing}`);
+  log.push(`${label.padEnd(20)} boyX=${s.boy.x.toFixed(0)}px lane=${s.lane} d=${s.d.toFixed(1)} coins=${s.coins} chain=${s.boostChain} super=${s.superCharged ? 'Y' : '-'} shield=${s.shield}`);
 };
 
 /** The lane the player should be in: away from gates, towards coins. */
@@ -68,10 +68,10 @@ const wantedLane = () =>
     const free = [-1, 0, 1].filter((l) => !blocked.has(l));
     if (!free.length) return null;
     // Of the safe lanes, head for the one with the nearest coin.
-    const coin = ahead
-      .filter((i) => i.kind !== 'gate' && free.includes(i.lane) && i.z < 3.2)
-      .sort((a, b) => a.z - b.z)[0];
-    return coin ? coin.lane : free.includes(0) ? 0 : free[0];
+    const want = ahead
+      .filter((i) => i.kind !== 'gate' && free.includes(i.lane) && i.z < 3.4)
+      .sort((a, b) => (a.kind === 'boost' ? -1 : 0) - (b.kind === 'boost' ? -1 : 0) || a.z - b.z)[0];
+    return want ? want.lane : free.includes(0) ? 0 : free[0];
   });
 
 await wait(1200); // the opening frame: the painting, at rest
@@ -85,7 +85,7 @@ await note('riding, centre lane');
 // Play it properly for 24s: steer away from the red gates, towards the coins.
 const started = Date.now();
 let last = 0;
-while (Date.now() - started < 24000) {
+while (Date.now() - started < 30000) {
   const s = await state();
   if (s.state === 'crashed') break;
   const want = await wantedLane();

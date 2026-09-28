@@ -34,8 +34,9 @@ const BOOST_TIME = 1.6;
 export const CHAIN_LENGTH = 3;
 export const SUPER_MUL = 1.85;
 const SUPER_TIME = 3.2;
-/** How long a chain stays alive between chevrons. */
-const CHAIN_WINDOW = 7;
+/** How long a chain stays alive between chevrons. Long enough that a
+ *  chain is actually reachable at the rate chevrons appear. */
+const CHAIN_WINDOW = 13;
 /** Lateral tolerance: how close (in lanes) the boy must be to touch an item. */
 const TOUCH = 0.5;
 /** Spacing of a coin train, matching the painted trail. */
@@ -164,9 +165,15 @@ export class Track {
       end = this.coinTrain(freeLane, w + 0.2, 4);
       end = Math.max(end, w + 1.0);
     } else if (roll < 0.84) {
+      // A run of chevrons in one lane: hold it and the chain pays out.
       const lane = pick();
-      this.add('boost', lane, w);
-      end = this.coinTrain(lane, w + 0.7, 5);
+      let ww = w;
+      for (let i = 0; i < CHAIN_LENGTH; i++) {
+        this.add('boost', lane, ww);
+        this.coinTrain(lane, ww + 0.45, 2, 0.5);
+        ww += 1.6;
+      }
+      end = ww;
     } else {
       // Zig-zag across the lanes.
       const dir = r.chance(0.5) ? 1 : -1;

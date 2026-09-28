@@ -193,7 +193,7 @@ describe('boost chain and safe ride', () => {
     const t = new Track(9);
     chevrons(t, 2);
     expect(t.boostChain).toBe(2);
-    for (let i = 0; i < 60 * 9; i++) t.update(1 / 60, 5, true); // ride on without one
+    for (let i = 0; i < 60 * 15; i++) t.update(1 / 60, 5, true); // ride on well past the window
     expect(chevrons(t, 1)).toEqual([false]); // the chain had lapsed, so no super
   });
 
