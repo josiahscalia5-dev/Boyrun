@@ -1,0 +1,31 @@
+{
+  "name": "skizgairos",
+  "private": true,
+  "version": "0.1.0",
+  "description": "SKIZGAIROS - ride, switch, discover and glide across the sky rails.",
+  "type": "module",
+  "scripts": {
+    "dev": "vite --host",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview --host --port 4173 --strictPort",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "playtest": "node scripts/playtest.mjs",
+    "android:sync": "npm run build && npx cap sync android",
+    "android:open": "npx cap open android"
+  },
+  "dependencies": {
+    "@capacitor/android": "^8.5.2",
+    "@capacitor/core": "^8.5.2",
+    "@fontsource/montserrat": "^5.3.0",
+    "three": "^0.186.1"
+  },
+  "devDependencies": {
+    "@capacitor/cli": "^8.5.2",
+    "@types/three": "^0.186.0",
+    "playwright-core": "1.56",
+    "typescript": "^5.9.3",
+    "vite": "^7.3.6",
+    "vitest": "^3.2.7"
+  }
+}
