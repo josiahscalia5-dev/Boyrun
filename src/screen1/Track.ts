@@ -73,6 +73,12 @@ export class Track {
     return this.boostTime > 0;
   }
 
+  /** Stop dead (the boy hit a gate). */
+  halt(): void {
+    this.speed = 0;
+    this.boostTime = 0;
+  }
+
   private add(kind: ItemKind, lane: Lane, w: number, artIndex?: number): Item {
     const it: Item = { id: this.nextId++, kind, lane, w, artIndex, state: 'live' };
     this.items.push(it);
@@ -133,7 +139,7 @@ export class Track {
       const target = Math.min(MAX_SPEED, BASE_SPEED + this.time * 0.009);
       this.speed += (target - this.speed) * Math.min(1, dt * 2);
     } else {
-      this.speed = Math.max(0, this.speed - dt * 5);
+      this.speed = 0;
     }
     this.boostTime = Math.max(0, this.boostTime - dt);
     const v = this.speed * (this.boostTime > 0 ? BOOST_MUL : 1);

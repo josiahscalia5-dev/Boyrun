@@ -62,7 +62,7 @@ for cx, cy, r in coins:
 #  1. gold rail: mirror across the rail's centre line (the rail is symmetric),
 #  2. remaining rail pixels: interpolate along the rail's lengthwise streaks,
 #  3. small leftovers over the sky: classic inpainting from the surroundings.
-boy_hole = cv2.dilate(boy, np.ones((5, 5), np.uint8))
+boy_hole = cv2.dilate(boy, np.ones((3, 3), np.uint8))
 hole = cv2.bitwise_or(boy_hole, coin_mask)
 hsv = cv2.cvtColor(img, cv2.COLOR_BGR2HSV)
 hch, sch, vch = hsv[:, :, 0].astype(int), hsv[:, :, 1].astype(int), hsv[:, :, 2].astype(int)
@@ -175,6 +175,15 @@ hud_rgba = cv2.cvtColor(img, cv2.COLOR_BGR2BGRA)
 hud_rgba[:, :, 3] = hud_mask
 cv2.imwrite(f'{OUT}/hud.png', hud_rgba)
 cv2.imwrite(f'{OUT}/plate.png', plate)
+plate_coins = img.copy()
+cm1 = coin_mask > 0
+plate_coins[cm1] = plate[cm1]
+# the boy is drawn over this plate unchanged, so keep his painted pixels
+plate_coins[boy > 0] = img[boy > 0]
+cv2.imwrite(f'{OUT}/plate_coins.png', plate_coins)
+# App icon / favicon: the winged emblem from the painted level badge.
+emblem = img[16:72, 20:84]
+cv2.imwrite('public/favicon.png', cv2.resize(emblem, (128, 112), interpolation=cv2.INTER_LANCZOS4))
 
 # Live-number patches: panel background (no digits) rebuilt from a
 # text-free strip of the same panel, so updated values can be drawn in the
