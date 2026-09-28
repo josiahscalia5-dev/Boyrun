@@ -87,11 +87,14 @@ export class Player {
     this.boostTime = BOOST_TIME;
   }
 
-  crash(): void {
+  /** Hit a gate at distance `atS`: stop against it and bounce back. */
+  crash(atS: number = this.s): void {
     if (this.state !== 'riding') return;
     this.state = 'crashed';
     this.crashTime = 0;
-    this.move = null;
+    this.s = Math.min(this.s, atS - 1.1);
+    this.speed = -5.5;
+    this.boostTime = 0;
     this.bus.emit('crashed', {});
   }
 
@@ -121,7 +124,7 @@ export class Player {
       }
       case 'crashed':
         this.crashTime += dt;
-        this.speed = Math.max(0, this.speed - 55 * dt);
+        this.speed = Math.min(0, this.speed + 9 * dt);
         break;
       case 'finished':
         this.finishTime += dt;

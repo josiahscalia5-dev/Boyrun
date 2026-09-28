@@ -31,8 +31,8 @@ export const MOODS = {
     below: c(0xc9def7),
     sun: c(0xfff0c8),
     fog: c(0xcfe6ff),
-    fogNear: 140,
-    fogFar: 1500,
+    fogNear: 220,
+    fogFar: 2100,
     hemiSky: c(0xd6ecff),
     hemiGround: c(0x7a8fb8),
     hemiIntensity: 1.35,
@@ -79,7 +79,7 @@ void main() {
   col = mix(col, uTop, smoothstep(0.22, 0.9, y));
   col = mix(col, uBelow, smoothstep(0.0, -0.3, y));
   float sd = max(dot(d, uSunDir), 0.0);
-  col += uSun * (pow(sd, 6.0) * 0.28 + pow(sd, 48.0) * 0.6 + pow(sd, 400.0) * 1.2);
+  col += uSun * (pow(sd, 6.0) * 0.22 + pow(sd, 48.0) * 0.35 + pow(sd, 400.0) * 0.5);
   gl_FragColor = vec4(col, 1.0);
   #include <colorspace_fragment>
 }`;

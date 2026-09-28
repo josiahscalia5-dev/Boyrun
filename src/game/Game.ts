@@ -148,7 +148,7 @@ export class Game {
     });
     bus.on('coinCollected', ({ x, y, z }) => {
       this.audio.coin();
-      this.particles.burst(this.tmpV.set(x, y, z), 10, 5, 1.6, 1.2, 0.35, 0.35, 0.45);
+      this.particles.burst(this.tmpV.set(x, y, z), 8, 4.5, 1.5, 1.15, 0.35, 0.22, 0.4);
       const scr = this.tmpV.set(x, y, z).project(this.stage.camera);
       const rect = this.stageEl.getBoundingClientRect();
       this.hud.flyCoin(rect.left + ((scr.x + 1) / 2) * rect.width, rect.top + ((1 - scr.y) / 2) * rect.height);
@@ -320,7 +320,7 @@ export class Game {
         this.score += (p.s - sPrev) * DISTANCE_POINTS;
         if (p.state === 'riding' || p.state === 'finished') {
           const gate = this.blocks.hitGate(sPrev, p.s, p.lat);
-          if (gate && p.state === 'riding') p.crash();
+          if (gate && p.state === 'riding') p.crash(gate.s);
           if (p.state === 'riding' && this.blocks.hitBoost(sPrev, p.s, p.lat)) {
             p.boost();
             this.score += BOOST_POINTS;
@@ -389,7 +389,7 @@ export class Game {
     this.blocks.update(vdt, camS);
     this.scenery.update(vdt, camS, this.stage.camera);
     this.particles.update(vdt);
-    this.speedLines.intensity = this.state === 'playing' ? clamp01((p.speed - 22) / 14) + (p.boosting ? 0.6 : 0) : 0;
+    this.speedLines.intensity = this.state === 'playing' ? clamp01((p.speed - 31) / 12) * 0.6 + (p.boosting ? 0.8 : 0) : 0;
     this.speedLines.update(vdt, p.speed, this.stage.camera);
     this.stage.updateLights(this.view.worldPos);
     const cam = this.stage.camera.position;

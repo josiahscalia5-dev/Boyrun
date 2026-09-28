@@ -13,19 +13,23 @@ export interface RailTypeDef {
   edge: number;
   /** Soft halo colour bleeding onto the surroundings. */
   halo: number;
+  /** Width multiplier of the rail cross-section. */
+  width: number;
 }
 
 export const RAIL_TYPES: Record<RailType, RailTypeDef> = {
   blue: {
     id: 'blue',
-    core: 0xd8fbff,
-    edge: 0x1d8dff,
-    halo: 0x46b4ff,
+    core: 0x8fe4ff,
+    edge: 0x1273ff,
+    halo: 0x3aa6ff,
+    width: 1,
   },
   gold: {
     id: 'gold',
-    core: 0xfff8d8,
-    edge: 0xffa800,
-    halo: 0xffc93a,
+    core: 0xfff6cf,
+    edge: 0xffa000,
+    halo: 0xffc233,
+    width: 1.3,
   },
 };

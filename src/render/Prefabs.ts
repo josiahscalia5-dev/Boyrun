@@ -22,13 +22,13 @@ export interface Prefab {
 
 // Palette sampled from the reference art.
 const COL = {
-  grassA: new THREE.Color(0x86d657),
-  grassB: new THREE.Color(0x4f9e38),
+  grassA: new THREE.Color(0x7fd64a),
+  grassB: new THREE.Color(0x3f9a2e),
   grassC: new THREE.Color(0xb6dd62),
   dirt: new THREE.Color(0x7b6a3e),
-  rockLight: new THREE.Color(0xc2a27f),
-  rockMid: new THREE.Color(0x8d705c),
-  rockDark: new THREE.Color(0x5b4c5c),
+  rockLight: new THREE.Color(0xc0936a),
+  rockMid: new THREE.Color(0x8a6048),
+  rockDark: new THREE.Color(0x574358),
   moss: new THREE.Color(0x5d9c3e),
   wall: new THREE.Color(0xf3e7d2),
   wallShade: new THREE.Color(0xd9c7ab),

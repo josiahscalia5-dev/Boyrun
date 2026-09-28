@@ -230,11 +230,11 @@ export class Scenery {
       if (rng.chance(0.04)) put(cat.balloon, s0 + rng.range(0, CELL), side * rng.range(30, 110), rng.range(12, 40), rng.range(0.9, 1.3));
 
       // Clouds: a layer below the rails plus some drifting at rail height.
-      for (let i = 0; i < 3; i++) {
-        const below = rng.chance(0.7);
-        const lat = side * rng.range(below ? 0 : 22, below ? 220 : 240);
-        const h = below ? rng.range(-75, -28) : rng.range(-25, 30);
-        const w = rng.range(40, 110) * (below ? 1.3 : 0.8);
+      for (let i = 0; i < 4; i++) {
+        const below = rng.chance(0.55);
+        const lat = side * rng.range(below ? 0 : 26, below ? 220 : 260);
+        const h = below ? rng.range(-75, -28) : rng.range(-30, 45);
+        const w = rng.range(40, 110) * (below ? 1.3 : 0.9);
         lvl.course.toWorld(s0 + rng.range(0, CELL), lat, h, tmpV);
         const shade = rng.range(0.94, 1.0);
         const hd = this.clouds.add(tmpV.x, tmpV.y, tmpV.z, w, w * 0.5, shade, shade, 1, rng.range(0.75, 0.95), rng.int(0, 2));

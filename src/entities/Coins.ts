@@ -5,7 +5,7 @@ import { BillboardHandle, BillboardLayer } from '../render/Billboards';
 import { GeoKit, trs } from '../render/GeoKit';
 import { textures } from '../render/Textures';
 
-export const COIN_RADIUS = 0.38;
+export const COIN_RADIUS = 0.5;
 const VIEW_AHEAD = 420;
 const VIEW_BEHIND = 12;
 const CAPACITY = 260;
@@ -149,9 +149,9 @@ export class Coins {
       this.v.y += bob;
       this.m.compose(this.v, this.q, this.one);
       this.mesh.setMatrixAt(n++, this.m);
-      const glowA = 0.55 + 0.15 * Math.sin(this.time * 5 + c.phase);
-      if (!c.glow) c.glow = this.glows.add(this.v.x, this.v.y, this.v.z, 1.9, 1.9, 1.0, 0.72, 0.2, glowA);
-      else this.glows.update(c.glow, this.v.x, this.v.y, this.v.z, 1.9, 1.9, 1.0, 0.72, 0.2, glowA);
+      const glowA = 0.4 + 0.12 * Math.sin(this.time * 5 + c.phase);
+      if (!c.glow) c.glow = this.glows.add(this.v.x, this.v.y, this.v.z, 1.5, 1.5, 1.0, 0.72, 0.2, glowA);
+      else this.glows.update(c.glow, this.v.x, this.v.y, this.v.z, 1.5, 1.5, 1.0, 0.72, 0.2, glowA);
     }
     this.mesh.count = n;
     this.mesh.instanceMatrix.needsUpdate = true;

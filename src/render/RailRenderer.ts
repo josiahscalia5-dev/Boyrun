@@ -97,6 +97,7 @@ class RailChunk {
     const edge = new THREE.Color(type.edge);
     const core = new THREE.Color(type.core);
     const haloC = new THREE.Color(type.halo);
+    const W = type.width;
     const metalTop = new THREE.Color(0x6e7890);
     const metalBot = new THREE.Color(0x2c3246);
     const c = new THREE.Color();
@@ -132,7 +133,8 @@ class RailChunk {
     // Glow channel.
     for (let i = 0; i < ns; i++) {
       const f = frames[i];
-      for (const [x, y, nx, ny, u, mix] of GLOW) {
+      for (const [x0, y, nx, ny, u, mix] of GLOW) {
+        const x = x0 * W;
         this.pos[v * 3] = f.p.x + f.side.x * x + f.up.x * y;
         this.pos[v * 3 + 1] = f.p.y + f.side.y * x + f.up.y * y;
         this.pos[v * 3 + 2] = f.p.z + f.side.z * x + f.up.z * y;
@@ -153,7 +155,8 @@ class RailChunk {
     // Metal underbody.
     for (let i = 0; i < ns; i++) {
       const f = frames[i];
-      for (const [x, y, nx, ny] of METAL) {
+      for (const [x0, y, nx, ny] of METAL) {
+        const x = x0 * W;
         this.pos[v * 3] = f.p.x + f.side.x * x + f.up.x * y;
         this.pos[v * 3 + 1] = f.p.y + f.side.y * x + f.up.y * y;
         this.pos[v * 3 + 2] = f.p.z + f.side.z * x + f.up.z * y;
@@ -278,7 +281,7 @@ class RailChunk {
     this.bodyGeo.computeBoundingSphere();
 
     // Halo ribbon slightly below the channel so the rail occludes its centre.
-    const HW = 1.9;
+    const HW = 1.9 * W;
     for (let i = 0; i < ns; i++) {
       const f = frames[i];
       for (const sd of [-1, 1]) {

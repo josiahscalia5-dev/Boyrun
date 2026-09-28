@@ -55,7 +55,7 @@ export class Stage {
     this.scene.add(this.camera);
     this.backdrop.add(this.sky);
     this.scene.fog = new THREE.Fog(this.mood.fog, this.mood.fogNear, this.mood.fogFar);
-    this.backdrop.fog = new THREE.Fog(this.mood.fog, 120, 1100);
+    this.backdrop.fog = new THREE.Fog(this.mood.fog, 260, 1500);
     this.scene.add(this.hemi, this.key, this.key.target, this.rim, this.rim.target);
     this.backKey.position.set(-0.4, 1, 0.6);
     this.backdrop.add(this.backHemi, this.backKey);
@@ -142,7 +142,7 @@ export class Stage {
         main.clear = false;
         main.clearDepth = true;
         this.composer.addPass(main);
-        this.bloom = new UnrealBloomPass(new THREE.Vector2(1, 1), 0.55, 0.45, 0.82);
+        this.bloom = new UnrealBloomPass(new THREE.Vector2(1, 1), 0.32, 0.3, 1.35);
         this.composer.addPass(this.bloom);
         this.composer.addPass(new OutputPass());
       }

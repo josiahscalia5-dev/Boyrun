@@ -101,6 +101,7 @@ export class BoyModel {
     this.chest.position.y = 0.02;
     this.chest.add(this.head);
     this.head.position.y = 0.42;
+    this.head.scale.setScalar(1.14);
     this.head.add(this.hair);
 
     this.buildPelvis();
@@ -110,6 +111,7 @@ export class BoyModel {
     this.armR = this.buildArm(1);
     this.legL = this.buildLeg(-1);
     this.legR = this.buildLeg(1);
+    this.body.scale.setScalar(1.1);
     this.root.traverse((o) => {
       if ((o as THREE.Mesh).isMesh) o.castShadow = false;
     });
@@ -123,7 +125,7 @@ export class BoyModel {
 
   private buildPelvis(): void {
     const k = new GeoKit();
-    k.add(new THREE.CapsuleGeometry(0.13, 0.08, 4, 12), C.pants, trs(0, 0.0, 0, 0, 0, Math.PI / 2, 1, 1.15, 0.85));
+    k.add(new THREE.CapsuleGeometry(0.14, 0.09, 4, 12), C.pants, trs(0, 0.0, 0, 0, 0, Math.PI / 2, 1, 1.2, 0.9));
     k.add(new THREE.CylinderGeometry(0.155, 0.155, 0.05, 16), C.pantsDark, trs(0, 0.07, 0));
     k.add(new THREE.BoxGeometry(0.06, 0.045, 0.02), C.orange, trs(0, 0.07, -0.155));
     // cargo pockets
@@ -139,7 +141,7 @@ export class BoyModel {
       const c = new THREE.Color(C.jacket);
       if (p.y < 0.07) c.set(C.jacketDark);
       return c.multiplyScalar(0.85 + 0.15 * Math.max(0, n.y));
-    }, trs(0, 0.2, 0, 0, 0, 0, 1.2, 1, 0.82));
+    }, trs(0, 0.2, 0, 0, 0, 0, 1.32, 1.02, 0.9));
     // Orange hood bunched behind the neck and collar.
     k.add(new THREE.TorusGeometry(0.1, 0.045, 8, 16), C.orange, trs(0, 0.38, 0.0, Math.PI / 2, 0, 0, 1, 1, 0.8));
     k.add(new THREE.SphereGeometry(0.1, 12, 8), C.orange, trs(0, 0.37, 0.1, 0, 0, 0, 1.3, 0.7, 0.8));
@@ -157,7 +159,7 @@ export class BoyModel {
 
     // Backpack (seen from behind by the camera - the reference hero shot).
     const b = new GeoKit();
-    b.add(new THREE.BoxGeometry(0.3, 0.34, 0.14), (_p, n) => new THREE.Color(C.pack).multiplyScalar(0.8 + 0.25 * Math.max(0, n.y + n.z * 0.5)), trs(0, 0.21, 0.16));
+    b.add(new THREE.BoxGeometry(0.34, 0.38, 0.16), (_p, n) => new THREE.Color(C.pack).multiplyScalar(0.8 + 0.25 * Math.max(0, n.y + n.z * 0.5)), trs(0, 0.21, 0.16));
     b.add(new THREE.BoxGeometry(0.33, 0.05, 0.16), C.packFrame, trs(0, 0.38, 0.16));
     b.add(new THREE.BoxGeometry(0.33, 0.04, 0.16), C.packFrame, trs(0, 0.05, 0.16));
     for (const sx of [-1, 1]) b.add(new THREE.BoxGeometry(0.04, 0.34, 0.16), C.packFrame, trs(sx * 0.165, 0.21, 0.16));
@@ -168,14 +170,14 @@ export class BoyModel {
     this.mesh(b, this.chest);
     // Glowing emblem panel on the back of the pack.
     const emblem = new THREE.Mesh(
-      new THREE.PlaneGeometry(0.2, 0.2),
+      new THREE.PlaneGeometry(0.24, 0.24),
       new THREE.MeshBasicMaterial({ map: textures().emblem, transparent: true, color: new THREE.Color(1.6, 2.2, 2.4), depthWrite: false }),
     );
-    emblem.position.set(0, 0.24, 0.232);
+    emblem.position.set(0, 0.24, 0.247);
     this.chest.add(emblem);
     // Glow strip along the pack bottom.
     const strip = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.015, 0.01), this.glowMat);
-    strip.position.set(0, 0.075, 0.235);
+    strip.position.set(0, 0.07, 0.247);
     this.chest.add(strip);
   }
 
@@ -239,16 +241,16 @@ export class BoyModel {
     upper.position.set(side * 0.21, 0.33, 0);
     this.chest.add(upper);
     const ku = new GeoKit();
-    ku.add(new THREE.CapsuleGeometry(0.055, 0.14, 4, 10), C.jacket, trs(0, -0.1, 0));
-    ku.add(new THREE.CylinderGeometry(0.062, 0.062, 0.035, 12), C.orange, trs(0, -0.19, 0));
+    ku.add(new THREE.CapsuleGeometry(0.066, 0.14, 4, 10), C.jacket, trs(0, -0.1, 0));
+    ku.add(new THREE.CylinderGeometry(0.072, 0.072, 0.04, 12), C.orange, trs(0, -0.19, 0));
     this.mesh(ku, upper);
 
     const lower = new THREE.Group();
     lower.position.y = -0.22;
     upper.add(lower);
     const kl = new GeoKit();
-    kl.add(new THREE.CapsuleGeometry(0.043, 0.12, 4, 10), C.skin, trs(0, -0.07, 0));
-    kl.add(new THREE.CylinderGeometry(0.052, 0.048, 0.085, 12), C.bracer, trs(0, -0.155, 0));
+    kl.add(new THREE.CapsuleGeometry(0.05, 0.12, 4, 10), C.skin, trs(0, -0.07, 0));
+    kl.add(new THREE.CylinderGeometry(0.06, 0.056, 0.09, 12), C.bracer, trs(0, -0.155, 0));
     this.mesh(kl, lower);
     const ring = new THREE.Mesh(new THREE.TorusGeometry(0.052, 0.008, 6, 16), this.glowMat);
     ring.rotation.x = Math.PI / 2;
@@ -259,8 +261,8 @@ export class BoyModel {
     hand.position.y = -0.21;
     lower.add(hand);
     const kh = new GeoKit();
-    kh.add(new THREE.BoxGeometry(0.085, 0.09, 0.045), C.glove, trs(0, -0.035, 0));
-    kh.add(new THREE.BoxGeometry(0.08, 0.06, 0.035), C.glove, trs(0, -0.1, -0.004, 0.25, 0, 0));
+    kh.add(new THREE.BoxGeometry(0.1, 0.1, 0.055), C.glove, trs(0, -0.035, 0));
+    kh.add(new THREE.BoxGeometry(0.095, 0.07, 0.042), C.glove, trs(0, -0.105, -0.004, 0.25, 0, 0));
     kh.add(new THREE.CapsuleGeometry(0.016, 0.04, 3, 6), C.glove, trs(side * -0.045, -0.04, -0.02, 0, 0, side * 0.6));
     this.mesh(kh, hand);
     return { upper, lower, end: hand };
@@ -271,14 +273,15 @@ export class BoyModel {
     upper.position.set(side * 0.09, -0.04, 0);
     this.pelvis.add(upper);
     const ku = new GeoKit();
-    ku.add(new THREE.CapsuleGeometry(0.075, THIGH - 0.08, 4, 10), C.pants, trs(0, -THIGH / 2, 0));
+    ku.add(new THREE.CapsuleGeometry(0.092, THIGH - 0.08, 4, 10), C.pants, trs(0, -THIGH / 2, 0));
+    ku.add(new THREE.BoxGeometry(0.05, 0.1, 0.09), C.pantsDark, trs(0.085 * side, -THIGH * 0.55, 0));
     this.mesh(ku, upper);
 
     const lower = new THREE.Group();
     lower.position.y = -THIGH;
     upper.add(lower);
     const kl = new GeoKit();
-    kl.add(new THREE.CapsuleGeometry(0.062, SHIN - 0.1, 4, 10), C.pants, trs(0, -SHIN / 2, 0));
+    kl.add(new THREE.CapsuleGeometry(0.078, SHIN - 0.1, 4, 10), C.pants, trs(0, -SHIN / 2, 0));
     kl.add(new THREE.SphereGeometry(0.05, 8, 6), C.pantsDark, trs(0, -0.01, -0.04, 0, 0, 0, 1, 1, 0.7));
     this.mesh(kl, lower);
 
@@ -287,24 +290,24 @@ export class BoyModel {
     lower.add(foot);
     const kf = new GeoKit();
     // High-top hover-skate boot.
-    kf.add(new THREE.CylinderGeometry(0.075, 0.08, 0.12, 12), C.boot, trs(0, -0.02, 0.01));
-    kf.add(new THREE.BoxGeometry(0.125, 0.1, 0.26), C.boot, trs(0, -0.075, -0.04));
-    kf.add(new THREE.SphereGeometry(0.066, 10, 8), C.boot, trs(0, -0.08, -0.16, 0, 0, 0, 0.95, 0.75, 1));
-    kf.add(new THREE.BoxGeometry(0.13, 0.025, 0.2), C.bootStripe, trs(0, -0.04, -0.05));
-    kf.add(new THREE.BoxGeometry(0.14, 0.04, 0.32), C.sole, trs(0, -0.125, -0.045));
-    kf.add(new THREE.CylinderGeometry(0.085, 0.085, 0.02, 12), C.bootStripe, trs(0, 0.035, 0.01));
+    kf.add(new THREE.CylinderGeometry(0.092, 0.098, 0.14, 12), C.boot, trs(0, -0.02, 0.01));
+    kf.add(new THREE.BoxGeometry(0.155, 0.11, 0.3), C.boot, trs(0, -0.075, -0.05));
+    kf.add(new THREE.SphereGeometry(0.08, 10, 8), C.boot, trs(0, -0.08, -0.19, 0, 0, 0, 0.95, 0.72, 1));
+    kf.add(new THREE.BoxGeometry(0.16, 0.028, 0.22), C.bootStripe, trs(0, -0.035, -0.06));
+    kf.add(new THREE.BoxGeometry(0.17, 0.045, 0.36), C.sole, trs(0, -0.128, -0.055));
+    kf.add(new THREE.CylinderGeometry(0.102, 0.102, 0.025, 12), C.bootStripe, trs(0, 0.045, 0.01));
     this.mesh(kf, foot);
     // Glowing hover wheels / thrusters.
     for (const z of [-0.15, 0.07]) {
-      const w = new THREE.Mesh(new THREE.CylinderGeometry(0.048, 0.048, 0.12, 14), this.glowMat);
+      const w = new THREE.Mesh(new THREE.CylinderGeometry(0.055, 0.055, 0.15, 14), this.glowMat);
       w.rotation.z = Math.PI / 2;
       w.position.set(0, -0.15, z);
       foot.add(w);
     }
     const glow = new THREE.Sprite(
-      new THREE.SpriteMaterial({ map: textures().glow, color: 0x6fe6ff, blending: THREE.AdditiveBlending, depthWrite: false, transparent: true, opacity: 0.9 }),
+      new THREE.SpriteMaterial({ map: textures().glow, color: 0x6fe6ff, blending: THREE.AdditiveBlending, depthWrite: false, transparent: true, opacity: 0.7 }),
     );
-    glow.scale.set(0.55, 0.3, 1);
+    glow.scale.set(0.42, 0.22, 1);
     glow.position.set(0, -0.16, -0.04);
     foot.add(glow);
     this.bootGlows.push(glow);

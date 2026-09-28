@@ -315,12 +315,15 @@ body {
 .hint {
   position: absolute;
   left: 50%;
-  bottom: calc(var(--safe-bottom) + 250 * var(--u));
-  transform: translate(-50%, 10px);
+  top: calc(var(--safe-top) + 226 * var(--u));
+  transform: translate(-50%, -10px);
+  max-width: calc(440 * var(--u));
+  width: max-content;
+  text-align: center;
   padding: calc(10 * var(--u)) calc(20 * var(--u));
   font-size: calc(20 * var(--u));
   font-weight: 800;
-  white-space: nowrap;
+  line-height: 1.25;
   color: #fff;
   background: rgba(8, 20, 60, 0.72);
   border: calc(2 * var(--u)) solid rgba(160, 200, 255, 0.7);
@@ -383,8 +386,7 @@ body {
 }
 
 .screen.dim {
-  background: rgba(6, 16, 50, 0.55);
-  backdrop-filter: blur(2px);
+  background: radial-gradient(ellipse at 50% 45%, rgba(6, 16, 50, 0.35), rgba(6, 16, 50, 0.7));
 }
 
 .title-screen {

@@ -37,16 +37,19 @@ export function buildLevel(index = 1): LevelData {
 
   const gates = (s: number, ...keys: LaneKey[]) => keys.forEach((k) => b.gate(k, s));
 
-  b.coinLine('C', 30, 150, 4.5);
-  b.tutorial(140, 'DODGE THE RED GATES');
-  gates(200, 'C');
-  b.coinLine('L', 165, 250, 4.5);
-  b.coinLine('R', 175, 230, 5.5);
-  b.tutorial(235, 'BLUE CHEVRONS = SPEED BOOST');
-  b.boost('R', 265);
-  b.coinLine('R', 272, 325, 4);
-  gates(335, 'L', 'C');
-  b.coinLine('C', 360, 430, 4.5);
+  // Opening = the reference composition: coins down the gold rail, a red X
+  // block on the left rail and a blue chevron block on the right rail.
+  b.coinLine('C', 30, 200, 4.5);
+  gates(140, 'L');
+  b.boost('R', 146);
+  b.tutorial(95, 'AVOID RED GATES · RIDE THROUGH CHEVRONS');
+  gates(240, 'C');
+  b.coinLine('L', 208, 290, 4.5);
+  b.coinLine('R', 212, 262, 5.5);
+  b.boost('R', 305);
+  b.coinLine('R', 312, 360, 4);
+  gates(372, 'L', 'C');
+  b.coinLine('C', 395, 440, 4.5);
   gates(470, 'R');
   gates(505, 'C');
   b.coinLine('L', 470, 540, 5);

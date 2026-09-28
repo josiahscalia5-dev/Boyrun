@@ -9,9 +9,9 @@ import type { Player } from '../player/Player';
  * rails fill the width the same way on tall and short screens. Vertical
  * FOV grows on taller screens (more sky), within limits.
  */
-const TARGET_HFOV = 50 * DEG;
-const MIN_VFOV = 56;
-const MAX_VFOV = 84;
+const TARGET_HFOV = 40 * DEG;
+const MIN_VFOV = 52;
+const MAX_VFOV = 80;
 
 export function verticalFov(aspect: number): number {
   const v = (2 * Math.atan(Math.tan(TARGET_HFOV / 2) / aspect)) / DEG;
@@ -25,7 +25,9 @@ interface Offsets {
   lookUp: number;
 }
 
-const RIDE: Offsets = { back: 3.9, up: 2.35, ahead: 7.5, lookUp: 0.75 };
+const RIDE: Offsets = { back: 2.55, up: 1.8, ahead: 8, lookUp: 1.25 };
+/** Wider, higher view after a crash so the fallen hero and the gate both read. */
+const CRASH: Offsets = { back: 5.2, up: 3.2, ahead: 2, lookUp: 0.6 };
 
 /**
  * Third-person chase camera. Its anchor lives in course space (behind the
@@ -49,6 +51,7 @@ export class CameraRig {
   private time = 0;
   /** 0 = title orbit, 1 = ride camera. */
   private rideBlend = 0;
+  private crashBlend = 0;
   mode: 'title' | 'ride' = 'title';
   private initialized = false;
 
@@ -68,7 +71,14 @@ export class CameraRig {
     this.rideBlend = damp(this.rideBlend, this.mode === 'ride' ? 1 : 0, 2.2, dt);
 
     const lat = this.latSpring.update(p.lat, 0.16, dt);
-    const o = RIDE;
+    this.crashBlend = damp(this.crashBlend, p.state === 'crashed' ? 1 : 0, 2.5, dt);
+    const k = this.crashBlend;
+    const o: Offsets = {
+      back: RIDE.back + (CRASH.back - RIDE.back) * k,
+      up: RIDE.up + (CRASH.up - RIDE.up) * k,
+      ahead: RIDE.ahead + (CRASH.ahead - RIDE.ahead) * k,
+      lookUp: RIDE.lookUp + (CRASH.lookUp - RIDE.lookUp) * k,
+    };
     // Ride camera: behind and above the rider along the rail.
     const camS = p.s - o.back;
     course.toWorld(camS, lat * 0.82, p.h + o.up, this.desiredPos, this.frame);
@@ -77,7 +87,7 @@ export class CameraRig {
     // Title camera: slow orbit showing the hero from the side/front.
     if (this.rideBlend < 0.999) {
       course.frame(p.s, this.frame);
-      const a = 2.5 + Math.sin(this.time * 0.25) * 0.35;
+      const a = 0.75 + Math.sin(this.time * 0.25) * 0.35;
       const center = course.toWorld(p.s, p.lat, p.h + 0.95, new THREE.Vector3(), this.frame);
       const orbit = center
         .clone()
@@ -97,6 +107,7 @@ export class CameraRig {
       sp.ly.reset(this.desiredLook.y);
       sp.lz.reset(this.desiredLook.z);
       this.latSpring.reset(p.lat);
+      this.crashBlend = 0;
       this.initialized = true;
     }
     const posT = 0.07;

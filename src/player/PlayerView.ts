@@ -46,7 +46,7 @@ export class PlayerView {
     this.shadow.renderOrder = 3;
     this.group.add(this.shadow);
     this.contact = new THREE.Mesh(
-      new THREE.PlaneGeometry(2.2, 2.6),
+      new THREE.PlaneGeometry(1.5, 2.0),
       new THREE.MeshBasicMaterial({ map: tx.glow, color: 0x9ff0ff, transparent: true, opacity: 0.9, depthWrite: false, blending: THREE.AdditiveBlending }),
     );
     this.contact.renderOrder = 7;
@@ -79,7 +79,7 @@ export class PlayerView {
       return [m, pos];
     };
     [this.trail, this.trailPos] = makeTrail(1.25, new THREE.Color(0.45, 0.8, 1.6), 0.9);
-    [this.trailCore, this.trailCorePos] = makeTrail(0.45, new THREE.Color(1.6, 1.6, 1.8), 1);
+    [this.trailCore, this.trailCorePos] = makeTrail(0.4, new THREE.Color(1.2, 1.3, 1.5), 1);
   }
 
   resetTrail(): void {
@@ -110,11 +110,13 @@ export class PlayerView {
     const pose = this.model;
     if (p.state === 'crashed') {
       const t = p.crashTime;
-      pose.setTarget({ crouch: 0.2, lean: -0.3, roll: 0, armSpread: 0.4, armUp: 1, wobble: 1, boost: 0, shift: 0 });
-      // Tumble backwards off the skates.
-      root.rotateX(Math.min(1.25, t * 3.2));
-      root.rotateZ(Math.sin(t * 6) * 0.2 * Math.max(0, 1 - t));
-      root.position.addScaledVector(f.up, Math.max(0, Math.sin(Math.min(t, 0.6) * 5.2) * 0.55));
+      pose.setTarget({ crouch: 0.75, lean: -0.2, roll: 0, armSpread: 0.6, armUp: 0.6, wobble: Math.max(0, 1 - t), boost: 0, shift: 0 });
+      // Knocked back off the gate: a hop, then he stumbles down to one side.
+      const side = p.lat > 0.1 ? -1 : 1;
+      const fall = Math.min(1, t * 2.4);
+      root.position.addScaledVector(f.up, Math.sin(Math.min(t, 0.45) * 7) * 0.3 - fall * 0.12);
+      root.rotateX(-0.25 * fall);
+      root.rotateZ(-side * 0.5 * fall * fall);
     } else if (p.state === 'finished') {
       pose.setTarget({ crouch: 0.1, lean: 0.05, roll: 0, armSpread: 0.6, armUp: 1, wobble: 0, boost: 0, shift: 0, stance: 0.6 });
     } else if (p.state === 'idle') {
@@ -143,7 +145,7 @@ export class PlayerView {
     const railColor = new THREE.Color(RAIL_TYPES[p.rail.type].halo).lerp(new THREE.Color(0xffffff), 0.45);
     const cm = this.contact.material as THREE.MeshBasicMaterial;
     cm.color.copy(railColor);
-    cm.opacity = (0.75 + 0.2 * Math.sin(this.time * 24)) * (1 - lift * 0.6) * (p.state === 'crashed' ? 0.2 : 1);
+    cm.opacity = (0.5 + 0.12 * Math.sin(this.time * 24)) * (1 - lift * 0.6) * (p.state === 'crashed' ? 0.2 : 1);
 
     this.updateTrail(p, level, dt);
 
