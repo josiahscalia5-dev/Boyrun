@@ -37,8 +37,20 @@ await page.goto(base);
 await page.waitForFunction(() => document.body.dataset.ready === '1', null, { timeout: 60000 });
 
 const wait = (ms) => page.waitForTimeout(ms);
-const tap = (which) => page.dispatchEvent(`.hitbox-${which}`, 'pointerdown');
 const state = () => page.evaluate(() => window.__skz.state());
+
+/** A real flick of the finger across the screen - the only steering there is. */
+const swipe = async (dir, dx = 100, ms = 130, steps = 7) => {
+  const x = 206;
+  const y = 620;
+  await page.mouse.move(x, y);
+  await page.mouse.down();
+  for (let i = 1; i <= steps; i++) {
+    await page.mouse.move(x + (dir * dx * i) / steps, y);
+    await page.waitForTimeout(ms / steps);
+  }
+  await page.mouse.up();
+};
 
 // Real time from here on: no stepping, the game runs itself.
 const log = [];
@@ -64,7 +76,9 @@ const wantedLane = () =>
 
 await wait(1200); // the opening frame: the painting, at rest
 await note('opening frame');
-await page.dispatchEvent('#app', 'pointerdown'); // start riding
+await page.mouse.move(206, 620); // a tap sets him off - it never steers
+await page.mouse.down();
+await page.mouse.up();
 await wait(1800);
 await note('riding, centre lane');
 
@@ -76,7 +90,7 @@ while (Date.now() - started < 24000) {
   if (s.state === 'crashed') break;
   const want = await wantedLane();
   if (want !== null && want !== s.lane) {
-    await tap(want < s.lane ? 'left' : 'right');
+    await swipe(want < s.lane ? -1 : 1);
   }
   await wait(260);
   if (Date.now() - started - last > 4000) {
