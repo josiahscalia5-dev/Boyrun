@@ -468,7 +468,7 @@ export class GameplayScreen {
     let boyDrawn = false;
     for (const it of items) {
       const z = this.track.z(it);
-      if (!boyDrawn && z < HIT_Z && it.state !== 'hit') {
+      if (!boyDrawn && z <= HIT_Z) {
         this.drawBoy(c);
         boyDrawn = true;
       }
