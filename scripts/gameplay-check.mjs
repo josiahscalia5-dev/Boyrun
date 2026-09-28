@@ -59,9 +59,11 @@ const shot = async (page, name) => {
   const painted = await page.evaluate(async () => {
     const L = (await import('/src/gameplay/layout.json')).default;
     const p = window.__skz.state().hud.panels;
-    return Object.entries(p).map(([k, r]) => [k, Math.abs(r.x - L.ui[k].x) + Math.abs(r.y - L.ui[k].y)]);
+    return ['badge', 'score', 'time', 'pause'].map((k) => [k, Math.abs(p[k].x - L.ui[k].x) + Math.abs(p[k].y - L.ui[k].y)]);
   });
   for (const [name, off] of painted) check(off < 0.5, `${name} panel sits exactly where it is painted`);
+  // Steering is by touch now: the painted arrow buttons are gone.
+  check((await page.locator('.hitbox-left, .hitbox-right').count()) === 0, 'no large left/right arrow buttons on screen');
 
   // Pixel comparison of the rebuilt opening frame against the supplied image.
   const fid = await page.evaluate(async ([w, h]) => {
@@ -81,15 +83,22 @@ const shot = async (page, name) => {
     b.getContext('2d').drawImage(art, 0, 0, w, h);
     const pa = actx.getImageData(0, 0, w, h).data;
     const pb = b.getContext('2d').getImageData(0, 0, w, h).data;
+    // The two painted arrow buttons were deliberately removed, so compare
+    // everything except the circles they occupied.
+    const arrows = [[157, 1318, 128], [865, 1318, 128]];
     let within8 = 0;
     let within24 = 0;
+    let counted = 0;
     for (let i = 0; i < pa.length; i += 4) {
+      const px = (i / 4) % w;
+      const py = Math.floor(i / 4 / w);
+      if (arrows.some(([cx, cy, r]) => (px - cx) ** 2 + (py - cy) ** 2 < r * r)) continue;
+      counted++;
       const d = Math.max(Math.abs(pa[i] - pb[i]), Math.abs(pa[i + 1] - pb[i + 1]), Math.abs(pa[i + 2] - pb[i + 2]));
       if (d <= 8) within8++;
       if (d <= 24) within24++;
     }
-    const n = (w * h) / 100;
-    return { within8: within8 / n, within24: within24 / n };
+    return { within8: (100 * within8) / counted, within24: (100 * within24) / counted };
   }, ART);
   console.log(`      opening frame vs artwork: ${fid.within8.toFixed(2)}% within 8 levels, ${fid.within24.toFixed(2)}% within 24`);
   check(fid.within24 > 90, `the rebuilt opening frame is the artwork (${fid.within24.toFixed(1)}% within 24 levels)`);
@@ -105,33 +114,73 @@ const shot = async (page, name) => {
 {
   const { page, errors } = await open(412, 915, 1);
   await shot(page, 'open-phone');
-  // Tap the painted left arrow: starts the ride and moves left.
-  await page.dispatchEvent('.hitbox-left', 'pointerdown');
+
+  // Touch steering: a flick of the finger, anywhere on the screen.
+  const swipe = async (dx, { ms = 120, steps = 6, from = [206, 620] } = {}) => {
+    await page.mouse.move(from[0], from[1]);
+    await page.mouse.down();
+    for (let i = 1; i <= steps; i++) {
+      await page.mouse.move(from[0] + (dx * i) / steps, from[1]);
+      await page.waitForTimeout(ms / steps);
+    }
+    await page.mouse.up();
+  };
+  const tap = async () => {
+    await page.mouse.move(206, 620);
+    await page.mouse.down();
+    await page.waitForTimeout(60);
+    await page.mouse.up();
+  };
+
+  await tap();
   let st = await page.evaluate(() => window.__skz.advance(0.05));
-  check(st.state === 'riding', 'pressing the painted left arrow starts riding');
+  check(st.state === 'riding', 'a tap sets him off');
+  const afterTap = st.lane;
   st = await page.evaluate(() => window.__skz.advance(0.4));
-  check(st.lane === -1 && Math.abs(st.lanePos + 1) < 0.05, 'left arrow moves the boy to the left lane (smoothly)');
-  await page.dispatchEvent('.hitbox-left', 'pointerdown');
-  st = await page.evaluate(() => window.__skz.advance(0.3));
-  check(st.lane === -1, 'cannot go further left than the rail');
-  await page.dispatchEvent('.hitbox-right', 'pointerdown');
-  st = await page.evaluate(() => window.__skz.advance(0.4));
-  check(st.lane === 0, 'right arrow moves back to the centre');
+  check(st.lane === afterTap && st.lane === 0, 'a plain tap never steers him');
+  await swipe(-90);
+  st = await page.evaluate(() => window.__skz.advance(0.45));
+  check(st.lane === -1 && Math.abs(st.lanePos + 1) < 0.06, 'SWIPE LEFT carries him to the left rail');
+  await swipe(-90);
+  st = await page.evaluate(() => window.__skz.advance(0.35));
+  check(st.lane === -1, 'cannot swipe further left than the rail');
+  await swipe(90);
+  st = await page.evaluate(() => window.__skz.advance(0.45));
+  check(st.lane === 0, 'SWIPE RIGHT brings him back to the centre');
+  await swipe(90);
+  st = await page.evaluate(() => window.__skz.advance(0.45));
+  check(st.lane === 1, 'repeated swiping keeps stepping him across');
+  // A slow drag steers continuously, and he follows the finger part-way.
+  await page.mouse.move(206, 620);
+  await page.mouse.down();
+  await page.mouse.move(170, 620);
+  await page.waitForTimeout(90);
+  const mid = await page.evaluate(() => window.__skz.advance(0.18));
+  await page.mouse.move(120, 620);
+  await page.waitForTimeout(90);
+  const far = await page.evaluate(() => window.__skz.advance(0.18));
+  check(far.lanePos < mid.lanePos, `a drag steers him continuously (${mid.lanePos.toFixed(2)} -> ${far.lanePos.toFixed(2)})`);
+  await page.mouse.up();
+  st = await page.evaluate(() => window.__skz.advance(0.5));
+  check(Number.isInteger(st.lane) && Math.abs(st.lanePos - st.lane) < 0.06, 'letting go settles him onto a rail');
   // ---- The character must visibly move, in real screen pixels.
   {
+    // From a clean start, so the measurement is from the centre rail.
+    await page.evaluate(() => { window.__skz.screen.reset(); window.__skz.screen.start(); });
     const centre = await page.evaluate(() => window.__skz.advance(0.6));
-    await page.dispatchEvent('.hitbox-left', 'pointerdown');
+    await swipe(-90);
     const left = await page.evaluate(() => window.__skz.advance(0.45));
-    await page.dispatchEvent('.hitbox-right', 'pointerdown');
+    await swipe(90);
     await page.evaluate(() => window.__skz.advance(0.45));
-    await page.dispatchEvent('.hitbox-right', 'pointerdown');
-    const right = await page.evaluate(() => window.__skz.advance(0.45));
+    await swipe(90);
+    const turning = await page.evaluate(() => window.__skz.advance(0.12));
+    const right = await page.evaluate(() => window.__skz.advance(0.33));
     const leftPx = centre.boy.x - left.boy.x;
     const rightPx = right.boy.x - centre.boy.x;
-    check(leftPx > 40, `LEFT moves the boy ${leftPx.toFixed(0)}px across the screen`);
-    check(rightPx > 40, `RIGHT moves the boy ${rightPx.toFixed(0)}px across the screen`);
+    check(leftPx > 40, `SWIPE LEFT moves the boy ${leftPx.toFixed(0)}px across the screen`);
+    check(rightPx > 40, `SWIPE RIGHT moves the boy ${rightPx.toFixed(0)}px across the screen`);
     check(Math.abs(right.boy.x - left.boy.x) > 90, `full lane sweep is ${Math.abs(right.boy.x - left.boy.x).toFixed(0)}px wide`);
-    check(Math.abs(left.boy.lean) > 0.01 || Math.abs(right.boy.lean) > 0.01, 'he leans into the turn');
+    check(Math.abs(turning.boy.lean) > 0.02, `he leans into the turn (${turning.boy.lean.toFixed(3)} rad mid-crossing)`);
     // He is alive on the rail: the stride keeps moving him frame to frame.
     const bob = await page.evaluate(() => {
       const ys = [];
@@ -146,15 +195,14 @@ const shot = async (page, name) => {
       return most;
     });
     check(passing > 0, `coins and blocks sweep past him (${passing} in front of him at once)`);
-    await page.dispatchEvent('.hitbox-left', 'pointerdown');
-    await page.evaluate(() => window.__skz.advance(0.5));
   }
+  await page.evaluate(() => { window.__skz.screen.reset(); window.__skz.screen.start(); });
   st = await page.evaluate(() => window.__skz.advance(1.8));
   check(st.coins > 286, `collects coins on the gold rail (${st.coins})`);
   check(st.score > 24580 && st.seconds > 82, `score and timer run (${st.score}, ${st.seconds.toFixed(1)}s)`);
   check(st.d > 2, `forward movement along the rail (d=${st.d.toFixed(2)})`);
   await shot(page, 'riding-phone');
-  // Pause via the painted pause button.
+  // Pause via the painted pause button (the one button that remains).
   await page.dispatchEvent('.hitbox-pause', 'pointerdown');
   st = await page.evaluate(() => window.__skz.advance(0.5));
   check(st.state === 'paused', 'painted pause button pauses');

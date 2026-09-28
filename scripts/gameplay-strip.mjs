@@ -27,6 +27,16 @@ await page.evaluate(() => window.__skz.manual(true));
 await page.evaluate(() => window.__skz.start());
 await page.evaluate(() => window.__skz.advance(1.2));
 
+const swipe = async (dx, ms = 120, steps = 6) => {
+  await page.mouse.move(206, 620);
+  await page.mouse.down();
+  for (let i = 1; i <= steps; i++) {
+    await page.mouse.move(206 + (dx * i) / steps, 620);
+    await page.waitForTimeout(ms / steps);
+  }
+  await page.mouse.up();
+};
+
 const shots = [];
 const grab = async (label) => {
   const s = await page.evaluate(() => window.__skz.state());
@@ -34,11 +44,11 @@ const grab = async (label) => {
 };
 await page.evaluate(() => window.__skz.advance(0.8));
 await grab('CENTRE');
-await page.dispatchEvent('.hitbox-left', 'pointerdown');
+await swipe(-90);
 await page.evaluate(() => window.__skz.advance(0.7));
 await grab('LEFT');
-await page.dispatchEvent('.hitbox-right', 'pointerdown');
-await page.dispatchEvent('.hitbox-right', 'pointerdown');
+await swipe(90);
+await swipe(90);
 await page.evaluate(() => window.__skz.advance(0.9));
 await grab('RIGHT');
 

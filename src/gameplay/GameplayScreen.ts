@@ -84,12 +84,15 @@ export class GameplayScreen {
   private readonly shimmerCtx: CanvasRenderingContext2D;
   private readonly stripe: HTMLCanvasElement;
   private readonly stripePattern: CanvasPattern;
-  private readonly hit: Record<Control, HTMLButtonElement>;
+  private readonly hit: Record<'pause', HTMLButtonElement>;
   private readonly cards: HTMLElement;
   private world: World = { x: 0, y: 0, s: 1 };
   private place: HudPlacement;
   private dpr = 1;
   private readonly laneSpring = new Spring1(0);
+  /** Where the finger wants him, continuous between lanes. */
+  private laneTarget = 0;
+  private dragPerLane = 74;
   private laneVel = 0;
   private time = 0;
   private crashTime = 0;
@@ -141,7 +144,7 @@ export class GameplayScreen {
       root.appendChild(b);
       return b;
     };
-    this.hit = { left: mk('left', 'Move left'), right: mk('right', 'Move right'), pause: mk('pause', 'Pause') };
+    this.hit = { pause: mk('pause', 'Pause') };
     this.cards = document.createElement('div');
     this.cards.className = 'cards';
     root.appendChild(this.cards);
@@ -206,9 +209,9 @@ export class GameplayScreen {
       b.style.width = `${r.w}px`;
       b.style.height = `${r.h}px`;
     };
-    box(this.hit.left, this.place.panels.arrow_left);
-    box(this.hit.right, this.place.panels.arrow_right);
     box(this.hit.pause, this.place.panels.pause);
+    // Finger travel for a full lane change, in this screen's pixels.
+    this.dragPerLane = Math.max(48, window.innerWidth * 0.18);
     this.root.style.setProperty('--u', `${this.place.scale}px`);
     this.drawBackground();
     this.render();
@@ -271,17 +274,12 @@ export class GameplayScreen {
   // ---------------------------------------------------------------- input
 
   private bindInput(): void {
-    const down = (name: Control) => (e: PointerEvent) => {
+    this.hit.pause.addEventListener('pointerdown', (e) => {
       e.preventDefault();
       e.stopPropagation();
-      this.action(name);
-    };
-    this.hit.left.addEventListener('pointerdown', down('left'));
-    this.hit.right.addEventListener('pointerdown', down('right'));
-    this.hit.pause.addEventListener('pointerdown', down('pause'));
-    this.root.addEventListener('pointerdown', () => {
-      if (this.state === 'ready') this.start();
+      this.action('pause');
     });
+    this.bindTouchSteering();
     window.addEventListener('keydown', (e) => {
       if (e.repeat) return;
       const map: Record<string, Control | 'start'> = {
@@ -299,6 +297,76 @@ export class GameplayScreen {
     document.addEventListener('contextmenu', (e) => e.preventDefault());
   }
 
+  /**
+   * Steering is the finger, anywhere on the screen. Dragging carries him
+   * across the rail as the hand moves; a flick sends him one rail over. A
+   * plain tap only sets him off - it never steers, so nothing moves by
+   * accident.
+   */
+  private bindTouchSteering(): void {
+    /** Finger travel, in pixels, that carries him one full lane across. */
+    const SLOP = 10; // a tap may wander this far and still be a tap
+    const FLICK_MS = 260;
+    const FLICK_PX = 34;
+    let id: number | null = null;
+    let x0 = 0;
+    let y0 = 0;
+    let t0 = 0;
+    let fromLane = 0;
+    let steering = false;
+
+    this.root.addEventListener('pointerdown', (e) => {
+      if (id !== null) return; // one steering finger at a time
+      id = e.pointerId;
+      x0 = e.clientX;
+      y0 = e.clientY;
+      t0 = performance.now();
+      fromLane = this.laneTarget;
+      steering = false;
+      this.root.setPointerCapture?.(e.pointerId);
+      if (this.state === 'ready') this.start();
+    });
+
+    this.root.addEventListener('pointermove', (e) => {
+      if (e.pointerId !== id) return;
+      const dx = e.clientX - x0;
+      if (!steering && Math.abs(dx) < SLOP) return;
+      steering = true;
+      if (this.state !== 'riding') return;
+      // Follow the hand, but never off the rail.
+      this.steerTo(fromLane + dx / this.dragPerLane);
+    });
+
+    const release = (e: PointerEvent) => {
+      if (e.pointerId !== id) return;
+      id = null;
+      this.root.releasePointerCapture?.(e.pointerId);
+      if (this.state !== 'riding') return;
+      const dx = e.clientX - x0;
+      const dy = e.clientY - y0;
+      const quick = performance.now() - t0 < FLICK_MS;
+      if (quick && Math.abs(dx) > FLICK_PX && Math.abs(dx) > Math.abs(dy)) {
+        // A flick: one rail over from where the hand started.
+        this.steerTo(Math.round(fromLane) + Math.sign(dx));
+      } else if (steering) {
+        // A drag: settle onto the rail he is closest to.
+        this.steerTo(Math.round(this.laneTarget));
+      }
+    };
+    this.root.addEventListener('pointerup', release);
+    this.root.addEventListener('pointercancel', release);
+  }
+
+  /** Steer towards a lane, continuously - he is carried, never teleported. */
+  steerTo(target: number): void {
+    const next = clamp(target, -1, 1);
+    if (next === this.laneTarget) return;
+    const was = this.lane;
+    this.laneTarget = next;
+    this.lane = Math.round(next) as Lane;
+    if (this.lane !== was) this.audio.whoosh(this.lane > was ? 1 : -1);
+  }
+
   action(name: Control): void {
     this.press[name] = 0.16;
     if (name === 'pause') {
@@ -309,13 +377,12 @@ export class GameplayScreen {
     if (this.state === 'ready') this.start();
     if (this.state !== 'riding') return;
     const dir = name === 'left' ? -1 : 1;
-    const next = clamp(this.lane + dir, -1, 1) as Lane;
+    const next = clamp(Math.round(this.laneTarget) + dir, -1, 1) as Lane;
     if (next === this.lane) {
       this.audio.blocked();
       return;
     }
-    this.lane = next;
-    this.audio.whoosh(dir);
+    this.steerTo(next);
   }
 
   // ----------------------------------------------------------------- flow
@@ -365,6 +432,7 @@ export class GameplayScreen {
     this.coins = ART_VALUES.coins;
     this.seconds = ART_VALUES.seconds;
     this.lane = 0;
+    this.laneTarget = 0;
     this.laneSpring.reset(0);
     this.laneVel = 0;
     this.time = 0;
@@ -413,7 +481,7 @@ export class GameplayScreen {
     this.time += dt;
     const riding = this.state === 'riding';
     const prevLane = this.laneSpring.value;
-    this.laneSpring.update(this.lane, 0.085, dt);
+    this.laneSpring.update(this.laneTarget, 0.085, dt);
     this.laneVel = dt > 0 ? (this.laneSpring.value - prevLane) / dt : 0;
     for (const ev of this.track.update(dt, this.laneSpring.value, riding)) {
       if (ev.type === 'coin') this.collect(ev.item);

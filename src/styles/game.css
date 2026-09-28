@@ -60,11 +60,6 @@ body {
   touch-action: none;
 }
 
-.hitbox-left,
-.hitbox-right {
-  border-radius: 50%;
-}
-
 .hitbox-pause {
   border-radius: calc(12 * var(--u));
 }
