@@ -60,6 +60,8 @@ export class Track {
   /** Chevrons taken so far towards the next super boost, 0..CHAIN_LENGTH-1. */
   boostChain = 0;
   superTime = 0;
+  /** The eased boost multiplier - never jumps. */
+  private mul = 1;
   private chainExpiry = 0;
   /** The section of the route he is riding, and whether the route is run out. */
   section = 0;
@@ -83,6 +85,7 @@ export class Track {
     this.boostTime = 0;
     this.boostChain = 0;
     this.superTime = 0;
+    this.mul = 1;
     this.chainExpiry = 0;
     this.section = 0;
     this.finished = false;
@@ -119,9 +122,17 @@ export class Track {
     return this.superTime > 0;
   }
 
-  /** How fast the rail is actually running, boosts included. */
+  /**
+   * How fast the rail is actually running. The boost multiplier is eased
+   * rather than switched, so a boost comes on promptly and bleeds away
+   * instead of dropping off a cliff when it expires.
+   */
   get velocity(): number {
-    return this.speed * (this.superTime > 0 ? SUPER_MUL : this.boostTime > 0 ? BOOST_MUL : 1);
+    return this.speed * this.mul;
+  }
+
+  private get targetMul(): number {
+    return this.superTime > 0 ? SUPER_MUL : this.boostTime > 0 ? BOOST_MUL : 1;
   }
 
   /**
@@ -145,6 +156,11 @@ export class Track {
     this.boostTime = 0;
     this.superTime = 0;
     this.boostChain = 0;
+  }
+
+  /** True while the boost is still bleeding away, for the jet and the camera. */
+  get boostStrength(): number {
+    return Math.max(0, (this.mul - 1) / (SUPER_MUL - 1));
   }
 
   /** Stop dead (the boy hit a gate). */
@@ -234,6 +250,10 @@ export class Track {
     }
     this.boostTime = Math.max(0, this.boostTime - dt);
     this.superTime = Math.max(0, this.superTime - dt);
+    // On quickly, off gently: the kick should land, the fade should not.
+    const target = this.targetMul;
+    const rate = target > this.mul ? 9 : 1.7;
+    this.mul += (target - this.mul) * Math.min(1, dt * rate);
     const v = this.velocity;
     const prevD = this.d;
     this.d += v * dt;
